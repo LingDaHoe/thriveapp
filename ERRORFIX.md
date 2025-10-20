@@ -1,0 +1,1 @@
+Please review my auth files: app.dart, main.dart, routes.dart, and router.dart. Ensure that all files are consistent and properly integrated to prevent any provider-related errors.

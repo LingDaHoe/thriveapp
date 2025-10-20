@@ -1,0 +1,140 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.example.thriveapp">
+    <!-- Location permissions -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    
+    <!-- Health Connect Permissions -->
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP" />
+    <uses-permission android:name="android.permission.health.READ_EXERCISE" />
+    <uses-permission android:name="android.permission.health.READ_WEIGHT" />
+    <uses-permission android:name="android.permission.health.READ_HEIGHT" />
+    <uses-permission android:name="android.permission.health.READ_BLOOD_OXYGEN" />
+    <uses-permission android:name="android.permission.health.READ_BLOOD_GLUCOSE" />
+    <uses-permission android:name="android.permission.health.READ_BLOOD_PRESSURE" />
+    <uses-permission android:name="android.permission.health.READ_BODY_TEMPERATURE" />
+    <uses-permission android:name="android.permission.health.READ_BODY_FAT" />
+    <uses-permission android:name="android.permission.health.READ_BASAL_METABOLIC_RATE" />
+    <uses-permission android:name="android.permission.health.READ_BODY_WATER" />
+    <uses-permission android:name="android.permission.health.READ_BONE_MASS" />
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE_VARIABILITY" />
+    <uses-permission android:name="android.permission.health.READ_LEAN_BODY_MASS" />
+    <uses-permission android:name="android.permission.health.READ_MUSCLE_MASS" />
+    <uses-permission android:name="android.permission.health.READ_NUTRITION" />
+    <uses-permission android:name="android.permission.health.READ_OXYGEN_SATURATION" />
+    <uses-permission android:name="android.permission.health.READ_POWER" />
+    <uses-permission android:name="android.permission.health.READ_RESPIRATORY_RATE" />
+    <uses-permission android:name="android.permission.health.READ_RESTING_HEART_RATE" />
+    <uses-permission android:name="android.permission.health.READ_SPEED" />
+    <uses-permission android:name="android.permission.health.READ_STEP_CADENCE" />
+    <uses-permission android:name="android.permission.health.READ_STEP_COUNT" />
+    <uses-permission android:name="android.permission.health.READ_TOTAL_CALORIES_BURNED" />
+    <uses-permission android:name="android.permission.health.READ_VO2MAX" />
+    <uses-permission android:name="android.permission.health.READ_WHEELCHAIR_PUSHES" />
+    <uses-permission android:name="android.permission.health.READ_DISTANCE" />
+    <uses-permission android:name="android.permission.health.READ_ELEVATION_GAINED" />
+    <uses-permission android:name="android.permission.health.READ_FLOORS_CLIMBED" />
+    <uses-permission android:name="android.permission.health.READ_MOVEMENT_MINUTES" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP_STAGE" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP_SESSION" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP_SEGMENT" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP_ASLEEP" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP_AWAKE" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP_DEEP" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP_LIGHT" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP_REM" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP_UNSPECIFIED" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP_IN_BED" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP_OUT_OF_BED" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP_ASLEEP_CORE" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP_ASLEEP_DEEP" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP_ASLEEP_REM" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP_ASLEEP_UNSPECIFIED" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP_AWAKE_CORE" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP_AWAKE_DEEP" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP_AWAKE_REM" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP_AWAKE_UNSPECIFIED" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP_DEEP_CORE" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP_DEEP_DEEP" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP_DEEP_REM" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP_DEEP_UNSPECIFIED" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP_REM_CORE" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP_REM_DEEP" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP_REM_REM" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP_REM_UNSPECIFIED" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP_UNSPECIFIED_CORE" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP_UNSPECIFIED_DEEP" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP_UNSPECIFIED_REM" />
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.BODY_SENSORS"/>
+    <uses-permission android:name="android.permission.BODY_SENSORS_BACKGROUND"/>
+    <uses-permission android:name="android.permission.BLUETOOTH"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
+    <uses-permission android:name="android.permission.health.READ_SLEEP_UNSPECIFIED_UNSPECIFIED" />
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.HEALTH_DATA_READ" />
+    <uses-permission android:name="android.permission.HEALTH_DATA_WRITE" />
+    <uses-permission android:name="android.permission.SEND_SMS"/>
+    <uses-permission android:name="android.permission.CALL_PHONE"/>
+    
+    <application
+        android:label="thriveapp"
+        android:name="${applicationName}"
+        android:icon="@mipmap/ic_launcher"
+        android:enableOnBackInvokedCallback="true">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            <!-- Specifies an Android theme to apply to this Activity as soon as
+                 the Android process has started. This theme is visible to the user
+                 while the Flutter UI initializes. After that, this theme continues
+                 to determine the Window background behind the Flutter UI. -->
+            <meta-data
+              android:name="io.flutter.embedding.android.NormalTheme"
+              android:resource="@style/NormalTheme"
+              />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+        <!-- Don't delete the meta-data below.
+             This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+    </application>
+    <!-- Required to query activities that can process text, see:
+         https://developer.android.com/training/package-visibility and
+         https://developer.android.com/reference/android/content/Intent#ACTION_PROCESS_TEXT.
+
+         In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.PROCESS_TEXT"/>
+            <data android:mimeType="text/plain"/>
+        </intent>
+    </queries>
+</manifest>

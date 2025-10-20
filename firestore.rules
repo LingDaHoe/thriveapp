@@ -1,0 +1,25 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow authenticated users to read and write their own data
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Allow authenticated users to read activities
+    match /activities/{activityId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.token.admin == true;
+    }
+    
+    // Allow authenticated users to read and write their own activity progress
+    match /activityProgress/{userId}/{activityId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Allow authenticated users to read and write their own achievements
+    match /achievements/{userId}/{achievementId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+} 

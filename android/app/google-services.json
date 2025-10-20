@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "829911105952",
+    "project_id": "thrive-wellness-app",
+    "storage_bucket": "thrive-wellness-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:829911105952:android:61780bc78ff2c2643a64c5",
+        "android_client_info": {
+          "package_name": "com.example.thriveapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBhVonijruhi8ceOcAw20P9yqGUVMnvqYU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
