@@ -3,7 +3,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../blocs/medication_bloc.dart';
 import '../models/medication.dart';
-import 'package:intl/intl.dart';
 
 class MedicationReminderCard extends StatelessWidget {
   const MedicationReminderCard({super.key});
@@ -19,7 +18,8 @@ class MedicationReminderCard extends StatelessWidget {
           }
 
           return Card(
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            color: Colors.white,
+            margin: const EdgeInsets.only(left: 5, right: 5, top: 0, bottom: 20),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -27,13 +27,25 @@ class MedicationReminderCard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.medication, size: 24),
-                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0097B2).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          Icons.medication,
+                          color: Color(0xFF0097B2),
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
                       const Text(
                         'Upcoming Medications',
                         style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
                         ),
                       ),
                       const Spacer(),
@@ -42,7 +54,13 @@ class MedicationReminderCard extends StatelessWidget {
                           // Navigate to medications screen using GoRouter
                           context.go('/health/medications');
                         },
-                        child: const Text('View All'),
+                        child: const Text(
+                          'View All',
+                          style: TextStyle(
+                            color: Color(0xFF0097B2),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -87,18 +105,19 @@ class MedicationReminderCard extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 40,
-            height: 40,
+            width: 50,
+            height: 50,
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(8),
+              color: const Color(0xFF0097B2),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Center(
               child: Text(
                 nextTime,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                style: const TextStyle(
+                  color: Colors.white,
                   fontWeight: FontWeight.bold,
+                  fontSize: 14,
                 ),
               ),
             ),
@@ -111,18 +130,35 @@ class MedicationReminderCard extends StatelessWidget {
                 Text(
                   medication.name,
                   style: const TextStyle(
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                    color: Colors.black87,
                   ),
                 ),
+                const SizedBox(height: 4),
                 Text(
                   '${medication.dosage} - ${medication.frequency}',
-                  style: Theme.of(context).textTheme.bodySmall,
+                  style: const TextStyle(
+                    color: Color(0xFF0097B2),
+                    fontSize: 13,
+                  ),
                 ),
               ],
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.check_circle_outline),
+            icon: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(
+                Icons.check_circle,
+                color: Colors.green,
+                size: 24,
+              ),
+            ),
             onPressed: () {
               context.read<MedicationBloc>().add(
                     MarkMedicationAsTaken(medication.id, DateTime.now()),
@@ -131,6 +167,7 @@ class MedicationReminderCard extends StatelessWidget {
                 SnackBar(
                   content: Text('${medication.name} marked as taken'),
                   duration: const Duration(seconds: 2),
+                  backgroundColor: const Color(0xFF0097B2),
                 ),
               );
             },

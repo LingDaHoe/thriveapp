@@ -115,25 +115,40 @@ class _HomeScreenState extends State<HomeScreen> {
               _selectedIndex = index;
             });
           },
-          destinations: const [
+          destinations: [
             NavigationDestination(
-              icon: Icon(Icons.dashboard),
+              icon: Icon(
+                Icons.dashboard,
+                color: _selectedIndex == 0 ? const Color(0xFF0097B2) : Colors.black54,
+              ),
               label: 'Dashboard',
             ),
             NavigationDestination(
-              icon: Icon(Icons.favorite),
+              icon: Icon(
+                Icons.favorite,
+                color: _selectedIndex == 1 ? const Color(0xFF0097B2) : Colors.black54,
+              ),
               label: 'Health',
             ),
             NavigationDestination(
-              icon: Icon(Icons.directions_run),
+              icon: Icon(
+                Icons.directions_run,
+                color: _selectedIndex == 2 ? const Color(0xFF0097B2) : Colors.black54,
+              ),
               label: 'Activities',
             ),
             NavigationDestination(
-              icon: Icon(Icons.school),
+              icon: Icon(
+                Icons.school,
+                color: _selectedIndex == 3 ? const Color(0xFF0097B2) : Colors.black54,
+              ),
               label: 'Learn',
             ),
             NavigationDestination(
-              icon: Icon(Icons.person),
+              icon: Icon(
+                Icons.person,
+                color: _selectedIndex == 4 ? const Color(0xFF0097B2) : Colors.black54,
+              ),
               label: 'Profile',
             ),
           ],
