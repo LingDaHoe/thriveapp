@@ -83,7 +83,7 @@ dependencies:
   fl_chart: ^0.65.0
 
   # Notifications
-  flutter_local_notifications: ^19.2.1
+  flutter_local_notifications: ^19.5.0
   timezone: ^0.10.1
 
   # Permissions
