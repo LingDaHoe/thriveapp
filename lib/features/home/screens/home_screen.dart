@@ -33,10 +33,18 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Thrive'),
+        backgroundColor: Colors.white,
+        shape: const Border(
+          bottom: BorderSide(
+            color: Color(0xFF0097B2),
+            width: 1.5,
+          ),
+        ),
+        title: Image.asset('assets/images/thrive-logo.png', width: 100),
+        centerTitle: false,
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout),
+            icon: const Icon(Icons.logout, color: Color(0xFF0097B2)),
             onPressed: () async {
               try {
                 await FirebaseAuth.instance.signOut();
@@ -57,45 +65,79 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: IndexedStack(
-        index: _selectedIndex,
+      body: Stack(
         children: [
-          _buildDashboard(),
-          _buildHealthMetrics(),
-          _buildActivities(),
-          _buildHealthEducation(),
-          _buildProfile(),
+          // Background Image
+          Positioned.fill(
+            child: Image.asset(
+              'assets/images/login-bg.png',
+              fit: BoxFit.cover,
+            ),
+          ),
+          Positioned(
+            bottom: 10,
+            right: 10,
+            child: Image.asset(
+              'assets/images/thrive-logo-transparent.png',
+              width: 84,
+              height: 35,
+            ),
+          ),
+          // Content
+          IndexedStack(
+            index: _selectedIndex,
+            children: [
+              _buildDashboard(),
+              _buildHealthMetrics(),
+              _buildActivities(),
+              _buildHealthEducation(),
+              _buildProfile(),
+            ],
+          ),
         ],
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.dashboard),
-            label: 'Dashboard',
+      bottomNavigationBar: Container(
+        decoration: const BoxDecoration(
+          border: Border(
+            top: BorderSide(
+              color: Color(
+                  0xFF0097B2), // light black divider, like default material
+              width: 1.5,
+            ),
           ),
-          NavigationDestination(
-            icon: Icon(Icons.favorite),
-            label: 'Health',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.directions_run),
-            label: 'Activities',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.school),
-            label: 'Learn',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person),
-            label: 'Profile',
-          ),
-        ],
+        ),
+        child: NavigationBar(
+          indicatorColor: Colors.transparent,
+          backgroundColor: Colors.white,
+          selectedIndex: _selectedIndex,
+          onDestinationSelected: (index) {
+            setState(() {
+              _selectedIndex = index;
+            });
+          },
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.dashboard),
+              label: 'Dashboard',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.favorite),
+              label: 'Health',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.directions_run),
+              label: 'Activities',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.school),
+              label: 'Learn',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.person),
+              label: 'Profile',
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -106,17 +148,39 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Welcome back, ${_auth.currentUser?.email?.split('@')[0] ?? 'User'}!',
-            style: Theme.of(context).textTheme.headlineSmall,
+          RichText(
+            text: TextSpan(
+              style: Theme.of(context).textTheme.headlineSmall,
+              children: [
+                const TextSpan(
+                  text: 'Welcome back, ',
+                  style: TextStyle(color: Colors.black87), // or your base color
+                ),
+                TextSpan(
+                  text: _auth.currentUser?.email != null
+                      ? (_auth.currentUser!.email!.split('@')[0].isNotEmpty
+                          ? _auth.currentUser!.email!
+                                  .split('@')[0][0]
+                                  .toUpperCase() +
+                              _auth.currentUser!.email!
+                                  .split('@')[0]
+                                  .substring(1)
+                          : 'User')
+                      : 'User',
+                  style: const TextStyle(
+                    color: Color(0xFF0097B2), // or any distinct color you want
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           _buildProfileCard(),
           const SizedBox(height: 16),
           _buildHealthSummaryCard(),
           const SizedBox(height: 16),
           const MedicationReminderCard(),
-          const SizedBox(height: 16),
           _buildQuickActions(),
           const SizedBox(height: 16),
           _buildRecentActivity(),
@@ -127,6 +191,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildProfileCard() {
     return Card(
+      color: Colors.white,
       child: InkWell(
         onTap: () {
           setState(() {
@@ -139,9 +204,10 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               CircleAvatar(
                 radius: 30,
-                backgroundColor: Theme.of(context).colorScheme.primary,
+                backgroundColor: const Color(0xFF0097B2),
                 child: Text(
-                  _auth.currentUser?.email?.split('@')[0].toUpperCase()[0] ?? 'U',
+                  _auth.currentUser?.email?.split('@')[0].toUpperCase()[0] ??
+                      'U',
                   style: const TextStyle(
                     fontSize: 24,
                     color: Colors.white,
@@ -154,14 +220,25 @@ class _HomeScreenState extends State<HomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _auth.currentUser?.email?.split('@')[0] ?? 'User',
-                      style: Theme.of(context).textTheme.titleLarge,
+                      (_auth.currentUser?.email
+                              ?.split('@')[0]
+                              ?.replaceFirstMapped(RegExp(r'^[a-z]'),
+                                  (m) => m.group(0)!.toUpperCase())) ??
+                          'User',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       'Tap to view and edit profile',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurface
+                                .withOpacity(0.6),
                           ),
                     ),
                   ],
@@ -177,14 +254,19 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildHealthSummaryCard() {
     return Card(
+      color: Colors.white,
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
+            const Text(
               'Today\'s Health Summary',
-              style: Theme.of(context).textTheme.titleLarge,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
             ),
             const SizedBox(height: 16),
             Row(
@@ -204,7 +286,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildMetricItem(IconData icon, String label, String value) {
     return Column(
       children: [
-        Icon(icon, size: 32),
+        Icon(icon, size: 32, color: const Color(0xFF0097B2)),
         const SizedBox(height: 8),
         Text(label, style: Theme.of(context).textTheme.bodyMedium),
         Text(value, style: Theme.of(context).textTheme.titleMedium),
@@ -214,6 +296,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildQuickActions() {
     return Card(
+      color: Colors.white,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -222,8 +305,9 @@ class _HomeScreenState extends State<HomeScreen> {
             const Text(
               'Quick Actions',
               style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
               ),
             ),
             const SizedBox(height: 16),
@@ -236,9 +320,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildActionButtons() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           _buildActionButton(
             icon: Icons.medical_services_outlined,
@@ -246,7 +330,13 @@ class _HomeScreenState extends State<HomeScreen> {
             onTap: () {
               // TODO: Implement health screen
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Health features coming soon!')),
+                const SnackBar(
+                  content: Text(
+                    'Health features coming soon!',
+                    style: TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                  backgroundColor: Color(0xFF0097B2),
+                ),
               );
             },
           ),
@@ -280,12 +370,12 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(12),
+              color: const Color(0xFF0097B2),
+              borderRadius: BorderRadius.circular(30),
             ),
-            child: Icon(icon),
+            child: Icon(icon, color: Colors.white),
           ),
           const SizedBox(height: 8),
           Text(label, style: Theme.of(context).textTheme.bodyMedium),
@@ -298,14 +388,15 @@ class _HomeScreenState extends State<HomeScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Emergency SOS'),
+        backgroundColor: Colors.white,
+        title: const Text('Emergency SOS', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 20),),
         content: const Text(
           'This will notify your emergency contacts with your location. Are you sure you want to trigger the SOS?',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w500, color: Colors.black87),),
           ),
           TextButton(
             onPressed: () {
@@ -313,7 +404,8 @@ class _HomeScreenState extends State<HomeScreen> {
               context.go('/emergency');
             },
             style: TextButton.styleFrom(
-              foregroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Colors.white,
+              backgroundColor: Theme.of(context).colorScheme.error,
             ),
             child: const Text('GO TO EMERGENCY'),
           ),
@@ -323,37 +415,74 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildRecentActivity() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Recent Activity',
-          style: Theme.of(context).textTheme.titleLarge,
+    return Card(
+      color: Colors.white,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Recent Activity',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: 3,
+              separatorBuilder: (context, index) => const Divider(),
+              itemBuilder: (context, index) {
+                return ListTile(
+                  tileColor: const Color(0xFF0097b2),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  leading: const Icon(Icons.history, color: Colors.white),
+                  title: Text('Activity ${index + 1}',
+                      style: const TextStyle(
+                          color: Colors.white, fontWeight: FontWeight.w600)),
+                  subtitle: Text('Description for activity ${index + 1}',
+                      style: const TextStyle(color: Colors.white)),
+                  trailing:
+                      const Icon(Icons.chevron_right, color: Colors.white),
+                );
+              },
+            ),
+          ],
         ),
-        const SizedBox(height: 16),
-        Card(
-          child: ListView.separated(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: 3,
-            separatorBuilder: (context, index) => const Divider(),
-            itemBuilder: (context, index) {
-              return ListTile(
-                leading: const Icon(Icons.history),
-                title: Text('Activity ${index + 1}'),
-                subtitle: Text('Description for activity ${index + 1}'),
-                trailing: const Icon(Icons.chevron_right),
-              );
-            },
-          ),
-        ),
-      ],
+      ),
     );
   }
 
   Widget _buildHealthMetrics() {
     return const Center(
-      child: Text('Health Metrics Screen - Coming Soon'),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            'Coming Soon!',
+            style: TextStyle(
+              color: Color(0xFF0097B2), // or any distinct color you want
+              fontWeight: FontWeight.bold,
+              fontSize: 24,
+            ),
+          ),
+          SizedBox(height: 12),
+          Text(
+            'Health Metrics Screen - \n More features arriving soon!',
+            style: TextStyle(
+              fontWeight: FontWeight.w500,
+              color: Colors.black87,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
     );
   }
 
@@ -399,4 +528,4 @@ class _HomeScreenState extends State<HomeScreen> {
       child: const ProfileScreen(),
     );
   }
-} 
+}
