@@ -58,12 +58,35 @@ class HomeService {
         try {
           final result = await platform.invokeMethod('requestHealthPermissions');
           if (result != true) {
-            throw Exception('Health permissions not granted');
+            debugPrint('Health permissions not granted, using fallback data');
+            // Use fallback data instead of throwing error
+            return HomeData(
+              userName: userData['displayName'] ?? 'User',
+              steps: 0,
+              heartRate: 0,
+              sleepHours: 0,
+              recommendations: [Recommendation(
+                title: 'Grant Health Permissions',
+                description: 'Grant health permissions to see your activity data',
+                icon: Icons.health_and_safety,
+              )],
+            );
           }
           _permissionsGranted = true;
         } catch (e) {
           debugPrint('Error requesting health permissions: $e');
-          throw Exception('Failed to request health permissions');
+          // Use fallback data instead of throwing error
+          return HomeData(
+            userName: userData['displayName'] ?? 'User',
+            steps: 0,
+            heartRate: 0,
+            sleepHours: 0,
+            recommendations: [Recommendation(
+              title: 'Grant Health Permissions',
+              description: 'Grant health permissions to see your activity data',
+              icon: Icons.health_and_safety,
+            )],
+          );
         }
       }
 

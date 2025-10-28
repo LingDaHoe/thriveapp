@@ -78,22 +78,66 @@ class HealthMonitoringService {
 
   Future<Map<String, dynamic>> getHealthMetrics() async {
     try {
-      // TODO: Get health metrics from platform
+      if (!_permissionsGranted) {
+        final granted = await requestHealthPermissions();
+        if (!granted) {
+          debugPrint('Health permissions not granted - returning default values');
+          // Return default values instead of throwing
+          return {
+            'steps': 0,
+            'heartRate': 0,
+            'sleep': 0.0,
+            'bloodPressure': {'systolic': 0, 'diastolic': 0},
+            'bloodOxygen': 0.0,
+            'bodyTemperature': 0.0,
+          };
+        }
+      }
+
+      final now = DateTime.now();
+      final startOfDay = DateTime(now.year, now.month, now.day);
+      
+      // Get real health data
+      final steps = await _getSteps(startOfDay, now);
+      final heartRate = await _getHeartRate(startOfDay, now);
+      final sleepHours = await _getSleepHours(startOfDay, now);
+      
+      final metrics = {
+        'steps': steps,
+        'heartRate': heartRate,
+        'sleep': sleepHours,
+        'bloodPressure': {'systolic': 0, 'diastolic': 0},
+        'bloodOxygen': 0.0,
+        'bodyTemperature': 0.0,
+      };
+      
+      // Store metrics for historical tracking (only if we have valid data)
+      if (steps > 0 || heartRate > 0) {
+        await _storeHealthMetrics(metrics);
+      }
+      
+      return metrics;
+    } catch (e) {
+      debugPrint('Error getting health metrics: $e');
+      // Return default values on error instead of throwing
       return {
         'steps': 0,
         'heartRate': 0,
-        'sleep': 0,
+        'sleep': 0.0,
+        'bloodPressure': {'systolic': 0, 'diastolic': 0},
+        'bloodOxygen': 0.0,
+        'bodyTemperature': 0.0,
       };
-    } catch (e) {
-      debugPrint('Error getting health metrics: $e');
-      rethrow;
     }
   }
 
   Future<void> _storeHealthMetrics(Map<String, dynamic> metrics) async {
     try {
       final userId = _auth.currentUser?.uid;
-      if (userId == null) throw Exception('User not authenticated');
+      if (userId == null) {
+        debugPrint('User not authenticated - skipping health metrics storage');
+        return;
+      }
 
       await _firestore.collection('healthData').add({
         'userId': userId,
@@ -103,7 +147,7 @@ class HealthMonitoringService {
       });
     } catch (e) {
       debugPrint('Error storing health metrics: $e');
-      rethrow;
+      // Don't rethrow - just log the error
     }
   }
 
@@ -146,9 +190,7 @@ class HealthMonitoringService {
       if (sleep.isEmpty) return 0.0;
       double totalMinutes = 0;
       for (var data in sleep) {
-        if (data.dateFrom != null && data.dateTo != null) {
-          totalMinutes += data.dateTo.difference(data.dateFrom).inMinutes.toDouble();
-        }
+        totalMinutes += data.dateTo.difference(data.dateFrom).inMinutes.toDouble();
       }
       return totalMinutes / 60.0;
     } catch (e) {

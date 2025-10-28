@@ -57,10 +57,37 @@ class _HealthContentScreenState extends State<HealthContentScreen> {
         await _audioPlayer!.setUrl(content.mediaUrl!);
       }
 
-      // Track content progress
+      // Check if this is first view before tracking
+      final progress = await context
+          .read<HealthContentService>()
+          .getContentProgress(widget.contentId);
+      final isFirstView = progress.isEmpty;
+
+      // Track content progress (awards points if first view)
       await context
           .read<HealthContentService>()
           .trackContentProgress(widget.contentId);
+
+      // Show points notification if first view
+      if (isFirstView && mounted) {
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Row(
+                  children: [
+                    Icon(Icons.stars, color: Colors.amber),
+                    SizedBox(width: 8),
+                    Text('You earned 5 points for reading this content!'),
+                  ],
+                ),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+        });
+      }
 
       if (mounted) {
         setState(() {

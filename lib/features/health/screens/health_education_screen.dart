@@ -3,7 +3,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../models/health_content.dart';
 import '../services/health_content_service.dart';
 import 'package:go_router/go_router.dart';
-import 'learning_progress_screen.dart';
 
 class HealthEducationScreen extends StatefulWidget {
   const HealthEducationScreen({Key? key}) : super(key: key);
@@ -237,6 +236,36 @@ class _HealthEducationScreenState extends State<HealthEducationScreen> {
                                     Text(
                                       item.category.toString().split('.').last,
                                       style: Theme.of(context).textTheme.bodySmall,
+                                    ),
+                                    const Spacer(),
+                                    FutureBuilder<Map<String, dynamic>>(
+                                      future: context.read<HealthContentService>().getContentProgress(item.id),
+                                      builder: (context, snapshot) {
+                                        if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+                                          return Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: Colors.green.withOpacity(0.1),
+                                              borderRadius: BorderRadius.circular(12),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const Icon(Icons.check_circle, size: 14, color: Colors.green),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  'Read',
+                                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                    color: Colors.green,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        }
+                                        return const SizedBox.shrink();
+                                      },
                                     ),
                                   ],
                                 ),

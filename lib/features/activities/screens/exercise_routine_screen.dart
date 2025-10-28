@@ -5,6 +5,7 @@ import '../activity_bloc.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../services/activity_service.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ExerciseRoutineScreen extends StatefulWidget {
   final Activity activity;
@@ -19,43 +20,74 @@ class _ExerciseRoutineScreenState extends State<ExerciseRoutineScreen> with Sing
   Timer? _timer;
   bool _isRunning = false;
   bool _isCompleted = false;
-  int _totalPoints = 0;
-  bool _loadingPoints = true;
-  DateTime? _startTime;
   late AnimationController _animationController;
-  late Animation<double> _animation;
   String _currentPhase = 'Ready';
   int _currentStep = 0;
   List<String> _instructions = [];
+  int? _effectiveDurationSeconds;
 
   @override
   void initState() {
     super.initState();
-    _remainingSeconds = widget.activity.duration * 60;
-    _fetchTotalPoints();
+    _effectiveDurationSeconds = _computeEffectiveDurationSeconds();
+    _remainingSeconds = _effectiveDurationSeconds!;
     _parseInstructions();
     
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1000),
     );
-    
-    _animation = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.easeInOut,
-      ),
-    );
   }
 
   void _parseInstructions() {
     final content = widget.activity.content;
-    if (content != null && content['instructions'] != null) {
+    if (content['instructions'] != null) {
       _instructions = (content['instructions'] as String)
           .split('\n')
           .where((line) => line.trim().isNotEmpty)
           .toList();
     }
+  }
+
+  int _difficultyToMinSeconds() {
+    // Base mins per difficulty for elder-friendly short routines
+    switch (widget.activity.difficulty.toLowerCase()) {
+      case 'easy':
+        return 4 * 60; // 4-6 mins
+      case 'medium':
+        return 6 * 60; // 6-8 mins
+      case 'hard':
+        return 8 * 60; // 8-9 mins
+      default:
+        return 5 * 60;
+    }
+  }
+
+  int _difficultyToMaxSeconds() {
+    switch (widget.activity.difficulty.toLowerCase()) {
+      case 'easy':
+        return 6 * 60;
+      case 'medium':
+        return 8 * 60;
+      case 'hard':
+        return 9 * 60; // keep < 10
+      default:
+        return 7 * 60;
+    }
+  }
+
+  int _computeEffectiveDurationSeconds() {
+    if (widget.activity.type.toLowerCase() != 'physical') {
+      return widget.activity.duration * 60;
+    }
+    final minS = _difficultyToMinSeconds();
+    final maxS = _difficultyToMaxSeconds();
+    final seed = DateTime.now().millisecondsSinceEpoch;
+    final span = (maxS - minS).clamp(0, 10 * 60);
+    final rand = (seed % (span == 0 ? 1 : span));
+    final value = minS + rand;
+    // Ensure strictly < 10 mins
+    return value.clamp(60, (10 * 60) - 1);
   }
 
   @override
@@ -69,10 +101,11 @@ class _ExerciseRoutineScreenState extends State<ExerciseRoutineScreen> with Sing
     if (_isRunning) return;
     setState(() {
       _isRunning = true;
-      _startTime = DateTime.now();
       _currentPhase = 'Exercise';
       _animationController.repeat(reverse: true);
     });
+    // Mark activity started so completion can use actual startedAt
+    context.read<ActivityBloc>().add(StartActivity(widget.activity.id));
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_remainingSeconds > 0) {
         setState(() => _remainingSeconds--);
@@ -97,8 +130,8 @@ class _ExerciseRoutineScreenState extends State<ExerciseRoutineScreen> with Sing
     setState(() {
       _isRunning = false;
       _isCompleted = false;
-      _remainingSeconds = widget.activity.duration * 60;
-      _startTime = null;
+      _effectiveDurationSeconds = _computeEffectiveDurationSeconds();
+      _remainingSeconds = _effectiveDurationSeconds!;
       _currentPhase = 'Ready';
       _currentStep = 0;
     });
@@ -134,6 +167,16 @@ class _ExerciseRoutineScreenState extends State<ExerciseRoutineScreen> with Sing
                       .completeActivity(widget.activity.id);
 
                   if (!mounted) return;
+
+                  // Show success message
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Activity completed successfully!'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                  }
 
                   // Show achievements if any were unlocked
                   if (newAchievements.isNotEmpty) {
@@ -186,10 +229,18 @@ class _ExerciseRoutineScreenState extends State<ExerciseRoutineScreen> with Sing
                 } catch (e) {
                   debugPrint('Error completing activity: $e');
                   if (!mounted) return;
+                  
+                  String errorMessage = 'Error completing activity';
+                  if (e.toString().contains('permissions')) {
+                    errorMessage = 'Activity completed! Health data unavailable due to permissions.';
+                  } else {
+                    errorMessage = 'Error completing activity: ${e.toString()}';
+                  }
+                  
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Error completing activity: $e'),
-                      backgroundColor: Colors.red,
+                      content: Text(errorMessage),
+                      backgroundColor: e.toString().contains('permissions') ? Colors.orange : Colors.red,
                     ),
                   );
                 }
@@ -208,26 +259,6 @@ class _ExerciseRoutineScreenState extends State<ExerciseRoutineScreen> with Sing
           backgroundColor: Colors.red,
         ),
       );
-    }
-  }
-
-  Future<void> _fetchTotalPoints() async {
-    final activityService = context.read<ActivityService>();
-    try {
-      final points = await activityService.getTotalPoints();
-      if (mounted) {
-        setState(() {
-          _totalPoints = points;
-          _loadingPoints = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _totalPoints = 0;
-          _loadingPoints = false;
-        });
-      }
     }
   }
 
@@ -286,6 +317,12 @@ class _ExerciseRoutineScreenState extends State<ExerciseRoutineScreen> with Sing
               widget.activity.description,
               style: Theme.of(context).textTheme.bodyLarge,
             ),
+            const SizedBox(height: 12),
+            if ((widget.activity.content)['videoUrl'] != null)
+              AspectRatio(
+                aspectRatio: 16 / 9,
+                child: _VideoTutorial(url: (widget.activity.content)['videoUrl'] as String),
+              ),
             const SizedBox(height: 16),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -342,7 +379,7 @@ class _ExerciseRoutineScreenState extends State<ExerciseRoutineScreen> with Sing
                         ),
                         const SizedBox(width: 10),
                         ElevatedButton.icon(
-                          onPressed: _completeRoutine,
+                          onPressed: _remainingSeconds == 0 && !_isCompleted ? _completeRoutine : null,
                           icon: const Icon(Icons.check),
                           label: const Text('Complete'),
                         ),
@@ -381,3 +418,44 @@ class _ExerciseRoutineScreenState extends State<ExerciseRoutineScreen> with Sing
     );
   }
 } 
+
+class _VideoTutorial extends StatelessWidget {
+  final String url;
+  const _VideoTutorial({required this.url});
+
+  Future<void> _openUrl() async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: _openUrl,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.black12,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            const Icon(Icons.play_circle_fill, size: 64, color: Colors.black54),
+            Positioned(
+              bottom: 8,
+              right: 8,
+              left: 8,
+              child: Text(
+                'Tap to open tutorial video',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

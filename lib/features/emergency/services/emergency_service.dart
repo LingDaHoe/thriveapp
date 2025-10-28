@@ -111,7 +111,7 @@ class EmergencyService {
         'latitude': position.latitude,
         'longitude': position.longitude,
         'accuracy': position.accuracy,
-        'timestamp': position.timestamp?.toIso8601String(),
+        'timestamp': position.timestamp.toIso8601String(),
       };
     } catch (e) {
       throw Exception('Failed to get location: $e');
@@ -170,44 +170,23 @@ This is an automated emergency alert. Please respond immediately.
       // Try different URI schemes for SMS
       bool smsSent = false;
       
-      // Try different SMS URI formats
-      final smsUris = [
-        Uri.parse('sms:$formattedPhone?body=${Uri.encodeComponent(message)}'),
-        Uri.parse('smsto:$formattedPhone?body=${Uri.encodeComponent(message)}'),
-        Uri.parse('sms:$formattedPhone'),
-      ];
-
-      for (final uri in smsUris) {
-        try {
-          if (await canLaunchUrl(uri)) {
-            await launchUrl(uri, mode: LaunchMode.externalApplication);
-            smsSent = true;
-            break;
-          }
-        } catch (e) {
-          print('Failed to launch SMS URI: $uri - $e');
-        }
-      }
-
-      if (!smsSent) {
-        print('SMS schemes failed, trying tel scheme...');
+      // Try SMS first
+      try {
+        final smsUri = Uri.parse('sms:$formattedPhone?body=${Uri.encodeComponent(message)}');
+        await launchUrl(smsUri, mode: LaunchMode.externalApplication);
+        smsSent = true;
+        print('SMS launched successfully');
+      } catch (e) {
+        print('SMS failed: $e');
         
-        // Try different phone URI formats
-        final telUris = [
-          Uri.parse('tel:$formattedPhone'),
-          Uri.parse('tel://$formattedPhone'),
-        ];
-
-        for (final uri in telUris) {
-          try {
-            if (await canLaunchUrl(uri)) {
-              await launchUrl(uri, mode: LaunchMode.externalApplication);
-              smsSent = true;
-              break;
-            }
-          } catch (e) {
-            print('Failed to launch tel URI: $uri - $e');
-          }
+        // Try phone call as fallback
+        try {
+          final telUri = Uri.parse('tel:$formattedPhone');
+          await launchUrl(telUri, mode: LaunchMode.externalApplication);
+          smsSent = true;
+          print('Phone call launched successfully');
+        } catch (e2) {
+          print('Phone call also failed: $e2');
         }
       }
 
@@ -224,26 +203,12 @@ This is an automated emergency alert. Please respond immediately.
 
       // Send Email if available
       if (contact.email != null) {
-        final emailUris = [
-          Uri.parse('mailto:${contact.email}?subject=EMERGENCY ALERT&body=${Uri.encodeComponent(message)}'),
-          Uri.parse('mailto:${contact.email}'),
-        ];
-
-        bool emailSent = false;
-        for (final uri in emailUris) {
-          try {
-            if (await canLaunchUrl(uri)) {
-              await launchUrl(uri, mode: LaunchMode.externalApplication);
-              emailSent = true;
-              break;
-            }
-          } catch (e) {
-            print('Failed to launch email URI: $uri - $e');
-          }
-        }
-
-        if (!emailSent) {
-          print('Could not launch email for: ${contact.email}');
+        try {
+          final emailUri = Uri.parse('mailto:${contact.email}?subject=${Uri.encodeComponent('EMERGENCY ALERT')}&body=${Uri.encodeComponent(message)}');
+          await launchUrl(emailUri, mode: LaunchMode.externalApplication);
+          print('Email launched successfully');
+        } catch (e) {
+          print('Email failed: $e');
           // Log this failure for debugging
           await logEmergencyEvent(
             type: 'email_failed',

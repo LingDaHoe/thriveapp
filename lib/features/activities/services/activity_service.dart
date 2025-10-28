@@ -12,14 +12,12 @@ class ActivityService {
   final FirebaseFirestore _firestore;
   final FirebaseAuth _auth;
   final Health _health;
-  final MethodChannel _healthChannel;
   bool _permissionsGranted = false;
 
   ActivityService()
       : _firestore = FirebaseFirestore.instance,
         _auth = FirebaseAuth.instance,
-        _health = Health(),
-        _healthChannel = const MethodChannel('com.example.thriveapp/health');
+        _health = Health();
 
   Future<bool> requestHealthPermissions() async {
     try {
@@ -31,9 +29,12 @@ class ActivityService {
 
       final authorized = await _health.requestAuthorization(types);
       _permissionsGranted = authorized;
+      debugPrint('Health permissions result: $authorized');
       return authorized;
     } catch (e) {
       debugPrint('Error requesting health permissions: $e');
+      // Don't throw error, just return false to allow activity completion
+      _permissionsGranted = false;
       return false;
     }
   }
@@ -133,20 +134,31 @@ class ActivityService {
       final userId = _auth.currentUser?.uid;
       if (userId == null) throw Exception('User not authenticated');
 
-      if (!_permissionsGranted) {
-        final granted = await requestHealthPermissions();
-        if (!granted) {
-          throw Exception('Health permissions not granted');
-        }
-      }
-
       final now = DateTime.now();
       final startOfDay = DateTime(now.year, now.month, now.day);
 
-      // Get health data
-      final steps = await _getSteps(startOfDay, now);
-      final heartRate = await _getHeartRate(startOfDay, now);
-      final sleepHours = await _getSleepHours(startOfDay, now);
+      // Try to get health data, but don't fail if permissions aren't granted
+      int steps = 0;
+      double heartRate = 0.0;
+      double sleepHours = 0.0;
+
+      try {
+        if (!_permissionsGranted) {
+          final granted = await requestHealthPermissions();
+          if (granted) {
+            _permissionsGranted = true;
+          }
+        }
+
+        if (_permissionsGranted) {
+          steps = await _getSteps(startOfDay, now);
+          heartRate = await _getHeartRate(startOfDay, now);
+          sleepHours = await _getSleepHours(startOfDay, now);
+        }
+      } catch (e) {
+        debugPrint('Health data not available: $e');
+        // Continue with activity completion even without health data
+      }
 
       final activity = await _firestore
           .collection('activities')
@@ -422,9 +434,7 @@ class ActivityService {
       );
       double totalMinutes = 0;
       for (var data in sleepData) {
-        if (data.dateFrom != null && data.dateTo != null) {
-          totalMinutes += data.dateTo.difference(data.dateFrom).inMinutes.toDouble();
-        }
+        totalMinutes += data.dateTo.difference(data.dateFrom).inMinutes.toDouble();
       }
       return totalMinutes / 60.0;
     } catch (e) {

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:thriveapp/config/router.dart';
-import 'package:thriveapp/config/theme.dart';
+import 'package:thriveapp/config/theme_provider.dart';
+import 'package:thriveapp/config/auth_notifier.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:provider/provider.dart';
 import 'package:thriveapp/features/auth/blocs/auth_bloc.dart';
 import 'package:thriveapp/features/auth/services/auth_service.dart';
 import 'package:thriveapp/features/home/services/home_service.dart';
@@ -39,68 +41,78 @@ class ThriveApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MultiRepositoryProvider(
+    return MultiProvider(
       providers: [
-        RepositoryProvider(
-          create: (context) => AuthService(),
-        ),
-        RepositoryProvider(
-          create: (context) => HomeService(),
-        ),
-        RepositoryProvider(
-          create: (context) => ActivityService(),
-        ),
-        RepositoryProvider(
-          create: (context) => HealthContentService(),
-        ),
-        RepositoryProvider(
-          create: (context) => HealthMonitoringService(),
-        ),
-        RepositoryProvider(
-          create: (context) => MedicationService(),
-        ),
-        RepositoryProvider(
-          create: (context) => EmergencyService(),
-        ),
-        RepositoryProvider(
-          create: (context) => AIService(
-            apiKey: AIConfig.apiKey,
-            apiUrl: AIConfig.apiUrl,
-          ),
-        ),
+        ChangeNotifierProvider(create: (context) => ThemeProvider()),
+        ChangeNotifierProvider(create: (context) => AuthNotifier()),
       ],
-      child: MultiBlocProvider(
+      child: MultiRepositoryProvider(
         providers: [
-          BlocProvider(
-            create: (context) => AuthBloc()..add(AuthCheckRequested()),
-            lazy: false,
+          RepositoryProvider(
+            create: (context) => AuthService(),
           ),
-          BlocProvider(
-            create: (context) => ActivityBloc(
-              context.read<ActivityService>(),
-            )..add(LoadActivities()),
+          RepositoryProvider(
+            create: (context) => HomeService(),
           ),
-          BlocProvider(
-            create: (context) => MedicationBloc(
-              medicationService: context.read<MedicationService>(),
-            )..add(LoadMedications()),
+          RepositoryProvider(
+            create: (context) => ActivityService(),
           ),
-          BlocProvider(
-            create: (context) => EmergencyBloc(
-              emergencyService: context.read<EmergencyService>(),
-            )..add(LoadEmergencyContacts()),
+          RepositoryProvider(
+            create: (context) => HealthContentService(),
           ),
-          BlocProvider(
-            create: (context) => AIChatBloc(
-              aiService: context.read<AIService>(),
+          RepositoryProvider(
+            create: (context) => HealthMonitoringService(),
+          ),
+          RepositoryProvider(
+            create: (context) => MedicationService(),
+          ),
+          RepositoryProvider(
+            create: (context) => EmergencyService(),
+          ),
+          RepositoryProvider(
+            create: (context) => AIService(
+              apiKey: AIConfig.apiKey,
+              apiUrl: AIConfig.apiUrl,
             ),
           ),
         ],
-        child: MaterialApp.router(
-          title: 'Thrive',
-          theme: AppTheme.lightTheme,
-          routerConfig: AppRouter.router,
-          debugShowCheckedModeBanner: false,
+        child: MultiBlocProvider(
+          providers: [
+            BlocProvider(
+              create: (context) => AuthBloc()..add(AuthCheckRequested()),
+              lazy: false,
+            ),
+            BlocProvider(
+              create: (context) => ActivityBloc(
+                context.read<ActivityService>(),
+              )..add(LoadActivities()),
+            ),
+            BlocProvider(
+              create: (context) => MedicationBloc(
+                medicationService: context.read<MedicationService>(),
+              )..add(LoadMedications()),
+            ),
+            BlocProvider(
+              create: (context) => EmergencyBloc(
+                emergencyService: context.read<EmergencyService>(),
+              )..add(LoadEmergencyContacts()),
+            ),
+            BlocProvider(
+              create: (context) => AIChatBloc(
+                aiService: context.read<AIService>(),
+              ),
+            ),
+          ],
+          child: Consumer2<ThemeProvider, AuthNotifier>(
+            builder: (context, themeProvider, authNotifier, child) {
+              return MaterialApp.router(
+                title: 'Thrive',
+                theme: themeProvider.currentTheme,
+                routerConfig: AppRouter.router(authNotifier),
+                debugShowCheckedModeBanner: false,
+              );
+            },
+          ),
         ),
       ),
     );

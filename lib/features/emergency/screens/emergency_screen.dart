@@ -96,7 +96,9 @@ class EmergencyScreen extends StatelessWidget {
             ),
           ] else ...[
             ElevatedButton(
-              onPressed: () => _showSOSDialog(context),
+              onPressed: state.contacts.isEmpty 
+                  ? null 
+                  : () => _showSOSDialog(context),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Theme.of(context).colorScheme.error,
                 foregroundColor: Theme.of(context).colorScheme.onError,
@@ -104,6 +106,16 @@ class EmergencyScreen extends StatelessWidget {
               ),
               child: const Text('SOS'),
             ),
+            if (state.contacts.isEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Add an emergency contact to enable SOS',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.error,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
           ],
         ],
       ),

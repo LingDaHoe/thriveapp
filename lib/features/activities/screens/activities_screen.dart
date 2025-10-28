@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../activity_bloc.dart';
 import '../models/activity.dart';
-import '../services/activity_service.dart';
-import '../screens/achievements_screen.dart';
 import 'exercise_routine_screen.dart';
 
 class ActivitiesScreen extends StatelessWidget {
@@ -22,8 +22,6 @@ class _ActivitiesScreenBody extends StatefulWidget {
 }
 
 class _ActivitiesScreenBodyState extends State<_ActivitiesScreenBody> with SingleTickerProviderStateMixin {
-  int? _totalPoints;
-  bool _loadingPoints = true;
   String _activeFilter = 'All Activities';
   String _activeDifficulty = 'All';
   String _searchQuery = '';
@@ -34,7 +32,6 @@ class _ActivitiesScreenBodyState extends State<_ActivitiesScreenBody> with Singl
   @override
   void initState() {
     super.initState();
-    _fetchTotalPoints();
     _tabController = TabController(length: 4, vsync: this);
   }
 
@@ -44,29 +41,79 @@ class _ActivitiesScreenBodyState extends State<_ActivitiesScreenBody> with Singl
     super.dispose();
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _fetchTotalPoints();
-  }
+  Future<void> _initializeSampleActivities(BuildContext context) async {
+    // Show confirmation dialog
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Load Sample Activities'),
+        content: const Text(
+          'This will add sample activities (Physical, Mental, and Social) to your Firestore database. Continue?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Load'),
+          ),
+        ],
+      ),
+    );
 
-  Future<void> _fetchTotalPoints() async {
-    final activityService = context.read<ActivityService>();
+    if (confirm != true || !mounted) return;
+
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Loading sample activities...'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
     try {
-      final points = await activityService.getTotalPoints();
-      if (mounted) {
-        setState(() {
-          _totalPoints = points;
-          _loadingPoints = false;
-        });
-      }
+      context.read<ActivityBloc>().add(InitializeActivities());
+      
+      // Wait for the bloc to process
+      await Future.delayed(const Duration(seconds: 2));
+      
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Sample activities loaded successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      
+      // Reload activities
+      context.read<ActivityBloc>().add(LoadActivities());
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _totalPoints = 0;
-          _loadingPoints = false;
-        });
-      }
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -87,6 +134,26 @@ class _ActivitiesScreenBodyState extends State<_ActivitiesScreenBody> with Singl
           IconButton(
             icon: const Icon(Icons.filter_list),
             onPressed: () => _showFilterDialog(context),
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            onSelected: (value) {
+              if (value == 'initialize') {
+                _initializeSampleActivities(context);
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'initialize',
+                child: Row(
+                  children: [
+                    Icon(Icons.add_circle_outline),
+                    SizedBox(width: 8),
+                    Text('Load Sample Activities'),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
         bottom: TabBar(
@@ -130,17 +197,32 @@ class _ActivitiesScreenBodyState extends State<_ActivitiesScreenBody> with Singl
                               ),
                         ),
                         const SizedBox(height: 4),
-                        _loadingPoints
-                            ? const LinearProgressIndicator(
+                        StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                          stream: FirebaseFirestore.instance
+                              .collection('profiles')
+                              .doc(FirebaseAuth.instance.currentUser?.uid)
+                              .snapshots(),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState == ConnectionState.waiting) {
+                              return const LinearProgressIndicator(
                                 valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                              )
-                            : Text(
-                                '${_totalPoints ?? 0}',
-                                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                              ),
+                              );
+                            }
+                            
+                            int points = 0;
+                            if (snapshot.hasData && snapshot.data?.data() != null) {
+                              points = snapshot.data!.data()!['totalPoints'] ?? 0;
+                            }
+                            
+                            return Text(
+                              '$points',
+                              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                            );
+                          },
+                        ),
                       ],
                     ),
                   ),

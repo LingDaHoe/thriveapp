@@ -3,48 +3,34 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../blocs/auth_bloc.dart';
 
-class SignupScreen extends StatefulWidget {
-  const SignupScreen({super.key});
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
 
   @override
-  State<SignupScreen> createState() => _SignupScreenState();
+  State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _SignupScreenState extends State<SignupScreen> {
+class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
   bool _isPasswordVisible = false;
-  bool _isConfirmPasswordVisible = false;
-  bool _acceptTerms = false;
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
-    _confirmPasswordController.dispose();
     super.dispose();
   }
 
-  void _handleSignup() {
+  void _handleLogin() {
     if (_formKey.currentState?.validate() ?? false) {
-      if (!_acceptTerms) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please accept the terms and conditions'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
       context.read<AuthBloc>().add(
-        SignUpEvent(
-          email: _emailController.text.trim(),
-          password: _passwordController.text,
-          name: _emailController.text.split('@')[0],
-        ),
-      );
+            SignInEvent(
+              email: _emailController.text.trim(),
+              password: _passwordController.text,
+            ),
+          );
     }
   }
 
@@ -60,7 +46,7 @@ class _SignupScreenState extends State<SignupScreen> {
             ),
           );
         } else if (state is AuthAuthenticated) {
-          context.go('/consent');
+          context.go('/home');
         }
       },
       child: Scaffold(
@@ -105,12 +91,12 @@ class _SignupScreenState extends State<SignupScreen> {
                   
                   const SizedBox(height: 48),
                   
-                  // Register Text
+                  // Welcome Text
                   RichText(
                     text: const TextSpan(
                       children: [
                         TextSpan(
-                          text: 'Register To ',
+                          text: 'Welcome to ',
                           style: TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.w600,
@@ -131,11 +117,25 @@ class _SignupScreenState extends State<SignupScreen> {
                   
                   const SizedBox(height: 12),
                   
-                  Text(
-                    'To access our apps, please register and provide valid information',
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: Colors.grey[700],
+                  RichText(
+                    text: TextSpan(
+                      children: [
+                        TextSpan(
+                          text: 'Enter your phone number or email to sign, Or ',
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                        const TextSpan(
+                          text: 'Create an Account',
+                          style: TextStyle(
+                            fontSize: 15,
+                            color: Color(0xFF00BCD4),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   
@@ -183,120 +183,132 @@ class _SignupScreenState extends State<SignupScreen> {
                       if (value == null || value.isEmpty) {
                         return 'Please enter your password';
                       }
-                      if (value.length < 8) {
-                        return 'Password must be at least 8 characters';
-                      }
                       return null;
                     },
                   ),
                   
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 12),
                   
-                  // Confirm Password Field
-                  TextFormField(
-                    controller: _confirmPasswordController,
-                    obscureText: !_isConfirmPasswordVisible,
-                    decoration: InputDecoration(
-                      labelText: 'Confirm Password',
-                      hintText: 'Re-enter your password',
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _isConfirmPasswordVisible ? Icons.visibility_off : Icons.visibility,
-                          color: Colors.grey,
+                  // Forgot Password
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      onPressed: () => context.push('/forgot-password'),
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(0, 0),
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: Text(
+                        'Forgot your password?',
+                        style: TextStyle(
+                          color: Colors.grey[700],
+                          fontSize: 14,
+                          decoration: TextDecoration.underline,
                         ),
-                        onPressed: () {
-                          setState(() => _isConfirmPasswordVisible = !_isConfirmPasswordVisible);
-                        },
                       ),
                     ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please confirm your password';
-                      }
-                      if (value != _passwordController.text) {
-                        return 'Passwords do not match';
-                      }
-                      return null;
-                    },
-                  ),
-                  
-                  const SizedBox(height: 20),
-                  
-                  // Terms Checkbox
-                  Row(
-                    children: [
-                      SizedBox(
-                        height: 24,
-                        width: 24,
-                        child: Checkbox(
-                          value: _acceptTerms,
-                          onChanged: (value) {
-                            setState(() => _acceptTerms = value ?? false);
-                          },
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          side: BorderSide(color: Colors.grey[400]!),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'Agree to our terms and conditions.',
-                          style: TextStyle(
-                            color: Colors.grey[700],
-                            fontSize: 14,
-                          ),
-                        ),
-                      ),
-                    ],
                   ),
                   
                   const SizedBox(height: 32),
                   
-                  // Buttons Row
+                  // Sign In Button
+                  BlocBuilder<AuthBloc, AuthState>(
+                    builder: (context, state) {
+                      return SizedBox(
+                        height: 56,
+                        child: ElevatedButton(
+                          onPressed: state is AuthLoading ? null : _handleLogin,
+                          child: state is AuthLoading
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text('Sign In'),
+                        ),
+                      );
+                    },
+                  ),
+                  
+                  const SizedBox(height: 24),
+                  
+                  // Divider
                   Row(
                     children: [
-                      // Sign In Button
-                      Expanded(
-                        child: SizedBox(
-                          height: 56,
-                          child: ElevatedButton(
-                            onPressed: () => context.go('/login'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF00BCD4),
-                            ),
-                            child: const Text('Sign In'),
+                      Expanded(child: Divider(color: Colors.grey[300])),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          'Or Sign In with Your Third-Party Account',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 13,
                           ),
                         ),
                       ),
-                      
-                      const SizedBox(width: 16),
-                      
-                      // Register Button
-                      Expanded(
-                        child: BlocBuilder<AuthBloc, AuthState>(
-                          builder: (context, state) {
-                            return SizedBox(
-                              height: 56,
-                              child: OutlinedButton(
-                                onPressed: state is AuthLoading ? null : _handleSignup,
-                                child: state is AuthLoading
-                                    ? const SizedBox(
-                                        height: 20,
-                                        width: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Color(0xFF00BCD4),
-                                        ),
-                                      )
-                                    : const Text('Register'),
-                              ),
-                            );
-                          },
+                      Expanded(child: Divider(color: Colors.grey[300])),
+                    ],
+                  ),
+                  
+                  const SizedBox(height: 24),
+                  
+                  // Social Login Buttons
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      // TODO: Implement Facebook login
+                    },
+                    icon: Image.asset(
+                      'assets/icons/facebook.png',
+                      height: 24,
+                      errorBuilder: (context, error, stackTrace) => 
+                          const Icon(Icons.facebook, color: Color(0xFF1877F2)),
+                    ),
+                    label: const Text('Connect with Facebook'),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: Colors.grey[300]!),
+                      foregroundColor: Colors.black87,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 16),
+                  
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      // TODO: Implement Google login
+                    },
+                    icon: Image.asset(
+                      'assets/icons/google.png',
+                      height: 24,
+                      errorBuilder: (context, error, stackTrace) => 
+                          const Icon(Icons.g_mobiledata, color: Color(0xFFDB4437)),
+                    ),
+                    label: const Text('Connect with Google'),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: Colors.grey[300]!),
+                      foregroundColor: Colors.black87,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 24),
+                  
+                  // Admin Login Link
+                  Center(
+                    child: TextButton(
+                      onPressed: () => context.go('/admin/login'),
+                      child: Text(
+                        'Admin/Caretaker Login',
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 13,
                         ),
                       ),
-                    ],
+                    ),
                   ),
                   
                   const SizedBox(height: 32),

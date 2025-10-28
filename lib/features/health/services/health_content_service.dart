@@ -460,15 +460,28 @@ Remember, prevention is better than cure.
       final userId = _auth.currentUser?.uid;
       if (userId == null) throw Exception('User not authenticated');
 
-      await _firestore
+      final progressRef = _firestore
           .collection('users')
           .doc(userId)
           .collection('contentProgress')
-          .doc(contentId)
-          .set({
+          .doc(contentId);
+
+      final progressDoc = await progressRef.get();
+      final isFirstView = !progressDoc.exists;
+
+      await progressRef.set({
         'lastViewed': FieldValue.serverTimestamp(),
         'viewCount': FieldValue.increment(1),
+        'pointsAwarded': isFirstView,
       }, SetOptions(merge: true));
+
+      // Award 5 points on first view only
+      if (isFirstView) {
+        final profileRef = _firestore.collection('profiles').doc(userId);
+        await profileRef.update({
+          'totalPoints': FieldValue.increment(5),
+        });
+      }
     } catch (e) {
       debugPrint('Error tracking content progress: $e');
       rethrow;

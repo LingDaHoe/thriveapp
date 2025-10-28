@@ -122,6 +122,9 @@ class EmergencyBloc extends Bloc<EmergencyEvent, EmergencyState> {
   ) async {
     try {
       await _emergencyService.addEmergencyContact(event.contact);
+      // Reload contacts after adding
+      final contacts = await _emergencyService.getEmergencyContacts().first;
+      emit(EmergencyLoaded(contacts: contacts));
     } catch (e) {
       emit(EmergencyError(e.toString()));
     }
@@ -133,6 +136,9 @@ class EmergencyBloc extends Bloc<EmergencyEvent, EmergencyState> {
   ) async {
     try {
       await _emergencyService.updateEmergencyContact(event.contact);
+      // Reload contacts after updating
+      final contacts = await _emergencyService.getEmergencyContacts().first;
+      emit(EmergencyLoaded(contacts: contacts));
     } catch (e) {
       emit(EmergencyError(e.toString()));
     }
@@ -144,6 +150,9 @@ class EmergencyBloc extends Bloc<EmergencyEvent, EmergencyState> {
   ) async {
     try {
       await _emergencyService.deleteEmergencyContact(event.id);
+      // Reload contacts after deleting
+      final contacts = await _emergencyService.getEmergencyContacts().first;
+      emit(EmergencyLoaded(contacts: contacts));
     } catch (e) {
       emit(EmergencyError(e.toString()));
     }
@@ -156,20 +165,27 @@ class EmergencyBloc extends Bloc<EmergencyEvent, EmergencyState> {
     try {
       final state = this.state;
       if (state is EmergencyLoaded) {
-        // First emit loading state
-        emit(EmergencyLoaded(
-          contacts: state.contacts,
-          isSOSActive: true,
-          remainingSeconds: 5,
-        ));
-
-        // Get location
+        // Get location first
         final location = await _emergencyService.getCurrentLocation();
 
-        // Wait for the timer
-        await Future.delayed(const Duration(seconds: 5));
+        // Countdown from 5 to 1
+        for (int i = 5; i > 0; i--) {
+          // Check if cancelled
+          if (this.state is! EmergencyLoaded || !(this.state as EmergencyLoaded).isSOSActive) {
+            return; // SOS was cancelled
+          }
+          
+          emit(EmergencyLoaded(
+            contacts: state.contacts,
+            isSOSActive: true,
+            remainingSeconds: i,
+          ));
+          
+          // Wait 1 second before next tick
+          await Future.delayed(const Duration(seconds: 1));
+        }
 
-        // Check if we're still in the same state
+        // Check one more time if we're still in the same state
         if (this.state is! EmergencyLoaded || !(this.state as EmergencyLoaded).isSOSActive) {
           return; // SOS was cancelled
         }

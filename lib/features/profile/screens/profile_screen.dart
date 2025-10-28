@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import '../blocs/profile_bloc.dart';
 import '../models/profile_model.dart';
 import '../../auth/blocs/auth_bloc.dart';
+import '../../admin/services/admin_service.dart';
+import '../../../config/theme_provider.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -83,6 +86,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   void _updateSettings(ProfileSettings settings) {
     context.read<ProfileBloc>().add(UpdateSettings(settings));
+    
+    // Also update the theme provider for immediate UI changes
+    final themeProvider = context.read<ThemeProvider>();
+    
+    // Update each setting individually to trigger proper notifications
+    if (themeProvider.isDarkMode != settings.darkMode) {
+      themeProvider.setDarkMode(settings.darkMode);
+    }
+    if (themeProvider.fontSize != settings.fontSize) {
+      themeProvider.setFontSize(settings.fontSize);
+    }
+    if (themeProvider.voiceGuidance != settings.voiceGuidance) {
+      themeProvider.setVoiceGuidance(settings.voiceGuidance);
+    }
   }
 
   @override
@@ -289,14 +306,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ));
                             },
                           ),
-                          SwitchListTile(
-                            title: const Text('Dark Mode'),
-                            subtitle: const Text('Use dark theme'),
-                            value: profile.settings.darkMode,
-                            onChanged: (value) {
-                              _updateSettings(profile.settings.copyWith(
-                                darkMode: value,
-                              ));
+                          Consumer<ThemeProvider>(
+                            builder: (context, themeProvider, child) {
+                              return SwitchListTile(
+                                title: const Text('Dark Mode'),
+                                subtitle: Text(themeProvider.isDarkMode 
+                                    ? 'Switch to Light Mode' 
+                                    : 'Switch to Dark Mode'),
+                                value: themeProvider.isDarkMode,
+                                onChanged: (value) {
+                                  _updateSettings(profile.settings.copyWith(
+                                    darkMode: value,
+                                  ));
+                                },
+                              );
                             },
                           ),
                           ListTile(
@@ -520,8 +543,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
+              // Clear admin session if exists
+              await AdminService.clearAdminSession();
+              if (!mounted) return;
               context.read<AuthBloc>().add(AuthSignOutRequested());
             },
             style: TextButton.styleFrom(
