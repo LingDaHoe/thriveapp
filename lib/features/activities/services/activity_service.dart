@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:health/health.dart';
 import '../models/activity.dart';
 import '../models/user_progress.dart';
@@ -915,10 +914,22 @@ class ActivityService {
 
   Future<void> addPointsHistory(PointsHistory history) async {
     try {
+      // Add points history
       await _firestore
           .collection('pointsHistory')
           .doc(history.id)
           .set(history.toJson());
+
+      // Update user's total points in profile
+      await _firestore
+          .collection('profiles')
+          .doc(history.userId)
+          .set({
+        'totalPoints': FieldValue.increment(history.points),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      
+      debugPrint('Added ${history.points} points to user profile. Source: ${history.source}');
     } catch (e) {
       debugPrint('Error adding points history: $e');
       rethrow;

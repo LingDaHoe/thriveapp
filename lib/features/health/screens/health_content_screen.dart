@@ -21,9 +21,6 @@ class _HealthContentScreenState extends State<HealthContentScreen> {
   VideoPlayerController? _videoController;
   AudioPlayer? _audioPlayer;
   bool _isPlaying = false;
-  bool _isLoading = true;
-  String? _error;
-  Map<String, dynamic>? _content;
 
   @override
   void initState() {
@@ -73,16 +70,33 @@ class _HealthContentScreenState extends State<HealthContentScreen> {
         Future.delayed(const Duration(milliseconds: 500), () {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
+              SnackBar(
                 content: Row(
                   children: [
-                    Icon(Icons.stars, color: Colors.amber),
-                    SizedBox(width: 8),
-                    Text('You earned 5 points for reading this content!'),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade100,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.stars, color: Colors.amber, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text(
+                        '🎉 You earned 5 points for reading this content!',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                      ),
+                    ),
                   ],
                 ),
-                backgroundColor: Colors.green,
-                duration: Duration(seconds: 3),
+                backgroundColor: const Color(0xFF4CAF50),
+                duration: const Duration(seconds: 3),
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                margin: const EdgeInsets.all(16),
               ),
             );
           }
@@ -91,22 +105,11 @@ class _HealthContentScreenState extends State<HealthContentScreen> {
 
       if (mounted) {
         setState(() {
-          _content = {
-            'title': content.title,
-            'description': content.description,
-            'content': content.content,
-            'type': content.type.toString(),
-            'mediaUrl': content.mediaUrl,
-          };
-          _isLoading = false;
+          // Content loaded, trigger rebuild
         });
       }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _error = e.toString();
-          _isLoading = false;
-        });
         // Show error snackbar after the frame is built
         WidgetsBinding.instance.addPostFrameCallback((_) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -120,8 +123,30 @@ class _HealthContentScreenState extends State<HealthContentScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
-        title: const Text('Health Education'),
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        iconTheme: const IconThemeData(color: Color(0xFF2C3E50)),
+        title: const Text(
+          'Health Education',
+          style: TextStyle(
+            color: Color(0xFF2C3E50),
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.bookmark_border),
+            onPressed: () {
+              // TODO: Implement bookmark functionality
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Bookmark feature coming soon!')),
+              );
+            },
+          ),
+        ],
       ),
       body: FutureBuilder<HealthContent>(
         future: context
@@ -129,37 +154,179 @@ class _HealthContentScreenState extends State<HealthContentScreen> {
             .getHealthContentById(widget.contentId),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF00BCD4)),
+              ),
+            );
           }
 
           if (snapshot.hasError) {
             return Center(
-              child: Text('Error: ${snapshot.error}'),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.error_outline,
+                    size: 64,
+                    color: Colors.red,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Error loading content',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${snapshot.error}',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.grey,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
             );
           }
 
           final content = snapshot.data!;
 
           return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  content.title,
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  content.description,
-                  style: Theme.of(context).textTheme.bodyLarge,
-                ),
-                const SizedBox(height: 16),
-                _buildContentTypeWidget(content),
-                const SizedBox(height: 24),
-                Text(
-                  content.content,
-                  style: Theme.of(context).textTheme.bodyMedium,
+                // Hero Image/Media Section
+                _buildMediaSection(content),
+                
+                // Content Section
+                Container(
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(24),
+                      topRight: Radius.circular(24),
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Category Badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF00BCD4).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            content.category.toString().split('.').last.toUpperCase(),
+                            style: const TextStyle(
+                              color: Color(0xFF00BCD4),
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        
+                        // Title
+                        Text(
+                          content.title,
+                          style: const TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF2C3E50),
+                            height: 1.3,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        
+                        // Description
+                        Text(
+                          content.description,
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey[700],
+                            height: 1.6,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        
+                        // Divider
+                        Container(
+                          height: 1,
+                          color: Colors.grey[200],
+                        ),
+                        const SizedBox(height: 24),
+                        
+                        // Content
+                        Text(
+                          content.content,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            color: Color(0xFF2C3E50),
+                            height: 1.8,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                        const SizedBox(height: 32),
+                        
+                        // Action Buttons
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: () {
+                                  // TODO: Implement share
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Share feature coming soon!')),
+                                  );
+                                },
+                                icon: const Icon(Icons.share_outlined),
+                                label: const Text('Share'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF00BCD4),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  elevation: 0,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            OutlinedButton.icon(
+                              onPressed: () {
+                                // TODO: Implement save for later
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Saved for later!')),
+                                );
+                              },
+                              icon: const Icon(Icons.bookmark_border),
+                              label: const Text('Save'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF00BCD4),
+                                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                side: const BorderSide(
+                                  color: Color(0xFF00BCD4),
+                                  width: 1.5,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -169,96 +336,217 @@ class _HealthContentScreenState extends State<HealthContentScreen> {
     );
   }
 
+  Widget _buildMediaSection(HealthContent content) {
+    return Container(
+      width: double.infinity,
+      constraints: const BoxConstraints(minHeight: 200),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF00BCD4).withOpacity(0.8),
+            const Color(0xFF00ACC1),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: _buildContentTypeWidget(content),
+      ),
+    );
+  }
+
   Widget _buildContentTypeWidget(HealthContent content) {
     switch (content.type) {
       case ContentType.video:
         if (_videoController == null) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(
+            child: CircularProgressIndicator(color: Colors.white),
+          );
         }
-        return AspectRatio(
-          aspectRatio: _videoController!.value.aspectRatio,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              VideoPlayer(_videoController!),
-              IconButton(
-                icon: Icon(
-                  _isPlaying ? Icons.pause : Icons.play_arrow,
-                  size: 48,
-                  color: Colors.white,
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: AspectRatio(
+            aspectRatio: _videoController!.value.aspectRatio,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                VideoPlayer(_videoController!),
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.black.withOpacity(0.3),
+                        Colors.transparent,
+                      ],
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                    ),
+                  ),
                 ),
-                onPressed: () {
-                  setState(() {
-                    if (_isPlaying) {
-                      _videoController!.pause();
-                    } else {
-                      _videoController!.play();
-                    }
-                    _isPlaying = !_isPlaying;
-                  });
-                },
-              ),
-            ],
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () {
+                      setState(() {
+                        if (_isPlaying) {
+                          _videoController!.pause();
+                        } else {
+                          _videoController!.play();
+                        }
+                        _isPlaying = !_isPlaying;
+                      });
+                    },
+                    child: Container(
+                      width: 72,
+                      height: 72,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.9),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        _isPlaying ? Icons.pause : Icons.play_arrow,
+                        size: 40,
+                        color: const Color(0xFF00BCD4),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         );
 
       case ContentType.audio:
         if (_audioPlayer == null) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(
+            child: CircularProgressIndicator(color: Colors.white),
+          );
         }
-        return Column(
-          children: [
-            StreamBuilder<Duration?>(
-              stream: _audioPlayer!.positionStream,
-              builder: (context, snapshot) {
-                final position = snapshot.data ?? Duration.zero;
-                final duration = _audioPlayer!.duration ?? Duration.zero;
-                return Column(
-                  children: [
-                    Slider(
-                      value: position.inMilliseconds.toDouble(),
-                      max: duration.inMilliseconds.toDouble(),
-                      onChanged: (value) {
-                        _audioPlayer!.seek(
-                          Duration(milliseconds: value.toInt()),
-                        );
-                      },
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(_formatDuration(position)),
-                          Text(_formatDuration(duration)),
-                        ],
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-            IconButton(
-              icon: Icon(
-                _isPlaying ? Icons.pause : Icons.play_arrow,
-                size: 48,
+        return Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            children: [
+              const Icon(
+                Icons.headphones,
+                size: 64,
+                color: Colors.white,
               ),
-              onPressed: () {
-                setState(() {
-                  if (_isPlaying) {
-                    _audioPlayer!.pause();
-                  } else {
-                    _audioPlayer!.play();
-                  }
-                  _isPlaying = !_isPlaying;
-                });
-              },
-            ),
-          ],
+              const SizedBox(height: 24),
+              StreamBuilder<Duration?>(
+                stream: _audioPlayer!.positionStream,
+                builder: (context, snapshot) {
+                  final position = snapshot.data ?? Duration.zero;
+                  final duration = _audioPlayer!.duration ?? Duration.zero;
+                  return Column(
+                    children: [
+                      SliderTheme(
+                        data: SliderThemeData(
+                          activeTrackColor: Colors.white,
+                          inactiveTrackColor: Colors.white.withOpacity(0.3),
+                          thumbColor: Colors.white,
+                          overlayColor: Colors.white.withOpacity(0.2),
+                        ),
+                        child: Slider(
+                          value: position.inMilliseconds.toDouble(),
+                          max: duration.inMilliseconds > 0 
+                              ? duration.inMilliseconds.toDouble()
+                              : 1.0,
+                          onChanged: (value) {
+                            _audioPlayer!.seek(
+                              Duration(milliseconds: value.toInt()),
+                            );
+                          },
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              _formatDuration(position),
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                            Text(
+                              _formatDuration(duration),
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+              const SizedBox(height: 16),
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () {
+                    setState(() {
+                      if (_isPlaying) {
+                        _audioPlayer!.pause();
+                      } else {
+                        _audioPlayer!.play();
+                      }
+                      _isPlaying = !_isPlaying;
+                    });
+                  },
+                  borderRadius: BorderRadius.circular(36),
+                  child: Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      _isPlaying ? Icons.pause : Icons.play_arrow,
+                      size: 40,
+                      color: const Color(0xFF00BCD4),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         );
 
       case ContentType.article:
-        return const SizedBox.shrink();
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.article,
+                  size: 64,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Article',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        );
     }
   }
 
@@ -268,4 +556,4 @@ class _HealthContentScreenState extends State<HealthContentScreen> {
     final seconds = twoDigits(duration.inSeconds.remainder(60));
     return '$minutes:$seconds';
   }
-} 
+}

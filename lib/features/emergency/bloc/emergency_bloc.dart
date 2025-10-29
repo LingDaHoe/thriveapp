@@ -165,7 +165,14 @@ class EmergencyBloc extends Bloc<EmergencyEvent, EmergencyState> {
     try {
       final state = this.state;
       if (state is EmergencyLoaded) {
-        // Get location first
+        // Immediately set SOS as active to show counter
+        emit(EmergencyLoaded(
+          contacts: state.contacts,
+          isSOSActive: true,
+          remainingSeconds: 5,
+        ));
+
+        // Get location
         final location = await _emergencyService.getCurrentLocation();
 
         // Countdown from 5 to 1
@@ -205,13 +212,18 @@ class EmergencyBloc extends Bloc<EmergencyEvent, EmergencyState> {
             notifiedContacts: state.contacts.map((c) => c.id).toList(),
           );
 
-          // Update state
+          // Update state - deactivate SOS
           emit(EmergencyLoaded(
             contacts: state.contacts,
             isSOSActive: false,
           ));
         } catch (e) {
           emit(EmergencyError('Failed to send emergency notifications: $e'));
+          // Reset state even if there's an error
+          emit(EmergencyLoaded(
+            contacts: state.contacts,
+            isSOSActive: false,
+          ));
         }
       }
     } catch (e) {

@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 class AIConfig {
   static const String apiKey = String.fromEnvironment(
     'OPENROUTER_API_KEY',
-    defaultValue: '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',
+    defaultValue: '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',
   );
 
   static const String apiUrl = String.fromEnvironment(

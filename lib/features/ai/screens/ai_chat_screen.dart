@@ -45,20 +45,66 @@ class _AIChatScreenState extends State<AIChatScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(
+        elevation: 0,
+        backgroundColor: const Color(0xFF00BCD4),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => context.go('/home'),
         ),
-        title: const Text('AI Assistant'),
+        title: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.psychology, color: Colors.white, size: 24),
+            ),
+            const SizedBox(width: 12),
+            const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Health AI Assistant',
+                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  'Always here to help',
+                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+              ],
+            ),
+          ],
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.help_outline),
+            icon: const Icon(Icons.help_outline, color: Colors.white),
             onPressed: () => _showHelpDialog(context),
           ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
-            onPressed: () => context.read<AIChatBloc>().add(ClearChat()),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, color: Colors.white),
+            onSelected: (value) {
+              if (value == 'clear') {
+                context.read<AIChatBloc>().add(ClearChat());
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'clear',
+                child: Row(
+                  children: [
+                    Icon(Icons.delete_outline, size: 20),
+                    SizedBox(width: 8),
+                    Text('Clear Chat'),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -74,7 +120,6 @@ class _AIChatScreenState extends State<AIChatScreen> {
               },
             ),
           ),
-          const Divider(height: 1.0),
           _buildMessageInput(),
         ],
       ),
@@ -89,41 +134,73 @@ class _AIChatScreenState extends State<AIChatScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(16),
+                gradient: LinearGradient(
+                  colors: [
+                    const Color(0xFF00BCD4),
+                    const Color(0xFF00BCD4).withOpacity(0.7),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF00BCD4).withOpacity(0.3),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
               ),
-              child: Icon(
+              child: const Icon(
                 Icons.psychology,
-                size: 64,
-                color: Theme.of(context).colorScheme.primary,
+                size: 80,
+                color: Colors.white,
               ),
             ),
-            const SizedBox(height: 24),
-            Text(
-              'Welcome to Your Health Assistant',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+            const SizedBox(height: 32),
+            const Text(
+              'Welcome to Your\nHealth AI Assistant',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF2C3E50),
+                height: 1.3,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
             Text(
-              'I\'m here to help you with your health and wellness journey. Ask me anything about:',
-              style: Theme.of(context).textTheme.bodyLarge,
+              'I\'m here to help you with your health and wellness journey. Ask me anything!',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey[600],
+                height: 1.5,
+              ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 32),
+            const Text(
+              'Try asking:',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF2C3E50),
+              ),
+            ),
+            const SizedBox(height: 16),
             Wrap(
-              spacing: 8,
-              runSpacing: 8,
+              spacing: 12,
+              runSpacing: 12,
               alignment: WrapAlignment.center,
               children: [
-                _buildSuggestionChip('How can I improve my sleep?'),
-                _buildSuggestionChip('What are some healthy meal ideas?'),
-                _buildSuggestionChip('Tips for stress management'),
-                _buildSuggestionChip('Exercise recommendations'),
+                _buildSuggestionChip('💤 How can I improve my sleep?'),
+                _buildSuggestionChip('🥗 Healthy meal ideas'),
+                _buildSuggestionChip('😌 Tips for stress management'),
+                _buildSuggestionChip('💪 Exercise recommendations'),
+                _buildSuggestionChip('🧘 Mindfulness practices'),
+                _buildSuggestionChip('💊 Medication reminders'),
               ],
             ),
           ],
@@ -133,15 +210,34 @@ class _AIChatScreenState extends State<AIChatScreen> {
   }
 
   Widget _buildSuggestionChip(String text) {
-    return ActionChip(
-      label: Text(text),
-      onPressed: () {
+    return InkWell(
+      onTap: () {
         _messageController.text = text;
         _handleSubmitted(text);
       },
-      backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-      labelStyle: TextStyle(
-        color: Theme.of(context).colorScheme.onPrimaryContainer,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: const Color(0xFF00BCD4).withOpacity(0.3)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Text(
+          text,
+          style: const TextStyle(
+            fontSize: 14,
+            color: Color(0xFF2C3E50),
+            fontWeight: FontWeight.w500,
+          ),
+        ),
       ),
     );
   }
@@ -165,36 +261,56 @@ class _AIChatScreenState extends State<AIChatScreen> {
   Widget _buildMessageBubble(ChatMessage message) {
     final isUser = message.isUser;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
       child: Row(
         mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!isUser) _buildAvatar(),
-          const SizedBox(width: 8),
+          if (!isUser) const SizedBox(width: 12),
           Flexible(
             child: Container(
               constraints: BoxConstraints(
                 maxWidth: MediaQuery.of(context).size.width * 0.75,
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 10.0),
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
               decoration: BoxDecoration(
-                color: isUser
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context).colorScheme.secondaryContainer,
-                borderRadius: BorderRadius.circular(20),
+                gradient: isUser
+                    ? LinearGradient(
+                        colors: [
+                          const Color(0xFF00BCD4),
+                          const Color(0xFF00ACC1),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      )
+                    : null,
+                color: isUser ? null : Colors.white,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(isUser ? 20 : 4),
+                  topRight: Radius.circular(isUser ? 4 : 20),
+                  bottomLeft: const Radius.circular(20),
+                  bottomRight: const Radius.circular(20),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: Text(
                 message.content,
                 style: TextStyle(
-                  color: isUser
-                      ? Theme.of(context).colorScheme.onPrimary
-                      : Theme.of(context).colorScheme.onSecondaryContainer,
+                  color: isUser ? Colors.white : const Color(0xFF2C3E50),
+                  fontSize: 15,
+                  height: 1.4,
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 8),
+          if (isUser) const SizedBox(width: 12),
           if (isUser) _buildAvatar(isUser: true),
         ],
       ),
@@ -222,67 +338,93 @@ class _AIChatScreenState extends State<AIChatScreen> {
   Widget _buildMessageInput() {
     return Container(
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 4,
-            offset: const Offset(0, -1),
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
           ),
         ],
       ),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(8.0),
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
           child: Row(
             children: [
               Expanded(
-                child: TextField(
-                  controller: _messageController,
-                  onChanged: (text) {
-                    setState(() {
-                      _isComposing = text.isNotEmpty;
-                    });
-                  },
-                  onSubmitted: _isComposing ? _handleSubmitted : null,
-                  decoration: InputDecoration(
-                    hintText: 'Type your message...',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(24),
-                      borderSide: BorderSide.none,
-                    ),
-                    filled: true,
-                    fillColor: Theme.of(context).colorScheme.surfaceVariant,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16.0,
-                      vertical: 8.0,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF5F5F5),
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: TextField(
+                    controller: _messageController,
+                    onChanged: (text) {
+                      setState(() {
+                        _isComposing = text.isNotEmpty;
+                      });
+                    },
+                    onSubmitted: _isComposing ? _handleSubmitted : null,
+                    maxLines: null,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: InputDecoration(
+                      hintText: 'Ask me anything about health...',
+                      hintStyle: TextStyle(
+                        color: Colors.grey[500],
+                        fontSize: 15,
+                      ),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 20.0,
+                        vertical: 12.0,
+                      ),
                     ),
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 12),
               BlocBuilder<AIChatBloc, AIChatState>(
                 builder: (context, state) {
                   if (state is AIChatLoading) {
                     return Container(
-                      padding: const EdgeInsets.all(8),
-                      child: const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00BCD4).withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Center(
+                        child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF00BCD4)),
+                          ),
+                        ),
                       ),
                     );
                   }
-                  return IconButton(
-                    icon: Icon(
-                      Icons.send_rounded,
-                      color: _isComposing
-                          ? Theme.of(context).colorScheme.primary
-                          : Theme.of(context).colorScheme.onSurface.withOpacity(0.38),
+                  return Material(
+                    color: _isComposing ? const Color(0xFF00BCD4) : Colors.grey[300],
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      onTap: _isComposing
+                          ? () => _handleSubmitted(_messageController.text)
+                          : null,
+                      customBorder: const CircleBorder(),
+                      child: Container(
+                        width: 48,
+                        height: 48,
+                        alignment: Alignment.center,
+                        child: Icon(
+                          Icons.send_rounded,
+                          color: _isComposing ? Colors.white : Colors.grey[500],
+                          size: 24,
+                        ),
+                      ),
                     ),
-                    onPressed: _isComposing
-                        ? () => _handleSubmitted(_messageController.text)
-                        : null,
                   );
                 },
               ),

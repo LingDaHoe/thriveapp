@@ -481,6 +481,34 @@ Remember, prevention is better than cure.
         await profileRef.update({
           'totalPoints': FieldValue.increment(5),
         });
+
+        // Get content details for the activity log
+        final contentDoc = await _firestore
+            .collection('healthContent')
+            .doc(contentId)
+            .get();
+        
+        if (contentDoc.exists) {
+          final contentData = contentDoc.data()!;
+          final now = DateTime.now();
+          
+          // Log as a completed activity for "Recent Activities"
+          await _firestore
+              .collection('activityProgress')
+              .doc(userId)
+              .collection('activities')
+              .add({
+            'userId': userId,
+            'activityId': contentId,
+            'title': contentData['title'],
+            'type': 'reading',  // or contentData['type']
+            'status': 'completed',
+            'pointsEarned': 5,
+            'completedAt': FieldValue.serverTimestamp(),
+            'startedAt': Timestamp.fromDate(now.subtract(const Duration(minutes: 5))),
+            'healthData': {},
+          });
+        }
       }
     } catch (e) {
       debugPrint('Error tracking content progress: $e');
