@@ -48,9 +48,18 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
         return;
       }
 
-      // Success! Navigate to admin dashboard
-      // Use go() to trigger router redirect logic
-      context.go('/admin/dashboard');
+      // Success! Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Welcome, ${adminUser.displayName}!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      // Navigate to admin dashboard using pushReplacement to avoid back navigation
+      if (mounted) {
+        context.pushReplacement('/admin/dashboard');
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

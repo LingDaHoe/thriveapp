@@ -29,7 +29,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: Row(
           children: [
@@ -174,7 +174,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             color: Colors.grey[600],
                           ),
                         ),
-                        Text(
+          Text(
                           name,
                           style: const TextStyle(
                             fontSize: 24,
@@ -228,12 +228,10 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 20),
           
           // Quick Access Section
-          const Text(
+          Text(
             'Quick Access',
-            style: TextStyle(
-              fontSize: 18,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.w600,
-              color: Color(0xFF333333),
             ),
           ),
           
@@ -276,9 +274,9 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: Theme.of(context).dividerColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -287,19 +285,14 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 12),
           Text(
             value,
-            style: const TextStyle(
-              fontSize: 24,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.bold,
-              color: Color(0xFF333333),
             ),
           ),
           const SizedBox(height: 4),
           Text(
             subtitle,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[600],
-            ),
+            style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
       ),
@@ -336,9 +329,9 @@ class _HomeScreenState extends State<HomeScreen> {
       borderRadius: BorderRadius.circular(12),
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade200),
+          border: Border.all(color: Theme.of(context).dividerColor),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -372,9 +365,9 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: Theme.of(context).dividerColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -535,9 +528,9 @@ class _HomeScreenState extends State<HomeScreen> {
               
               return Row(
                 children: [
-                  const Text(
+                  Text(
                     'Points:',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
                   const SizedBox(width: 8),
                   Container(
@@ -579,9 +572,9 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: Theme.of(context).dividerColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -637,9 +630,9 @@ class _HomeScreenState extends State<HomeScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: Theme.of(context).cardColor,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF00BCD4).withOpacity(0.3)),
+                border: Border.all(color: Theme.of(context).primaryColor.withOpacity(0.3)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -673,10 +666,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 12),
                   Text(
                     'You have ${snapshot.data!.docs.length} medication${snapshot.data!.docs.length > 1 ? 's' : ''} to take today',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                    ),
+                    style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 12),
                   ElevatedButton(
@@ -738,10 +728,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     }
                     return Text(
                       initial,
-                      style: const TextStyle(
-                        fontSize: 24,
-                        color: Colors.white,
-                      ),
+                  style: const TextStyle(
+                    fontSize: 24,
+                    color: Colors.white,
+                  ),
                     );
                   },
                 ),
@@ -765,7 +755,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         }
                         return Text(
                           name,
-                          style: Theme.of(context).textTheme.titleLarge,
+                      style: Theme.of(context).textTheme.titleLarge,
                         );
                       },
                     ),
@@ -980,14 +970,14 @@ class _HomeScreenState extends State<HomeScreen> {
             }
 
             return Card(
-              child: ListView.separated(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
+          child: ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
                 itemCount: activities.length,
-                separatorBuilder: (context, index) => const Divider(),
-                itemBuilder: (context, index) {
+            separatorBuilder: (context, index) => const Divider(),
+            itemBuilder: (context, index) {
                   final activity = activities[index];
-                  return ListTile(
+              return ListTile(
                     leading: Icon(_getActivityIcon(activity['type'])),
                     title: Text(activity['title'] ?? 'Unknown Activity'),
                     subtitle: Text('Completed ${_formatTimeAgo(activity['completedAt'])}'),
@@ -999,9 +989,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         const Icon(Icons.chevron_right),
                       ],
                     ),
-                  );
-                },
-              ),
+              );
+            },
+          ),
             );
           },
         ),
@@ -1029,41 +1019,96 @@ class _HomeScreenState extends State<HomeScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return Stream.value([]);
 
+      // Try query with orderBy first, fallback to simple query if it fails
       return FirebaseFirestore.instance
           .collection('activityProgress')
           .doc(user.uid)
           .collection('activities')
           .where('status', isEqualTo: 'completed')
-          .orderBy('completedAt', descending: true)
-          .limit(5)
           .snapshots()
           .asyncMap((snapshot) async {
-        final List<Map<String, dynamic>> results = [];
-        for (final doc in snapshot.docs) {
-          final data = doc.data();
-          final activityId = data['activityId'] as String?;
-          String? title;
-          String? type;
-          if (activityId != null && activityId.isNotEmpty) {
-            try {
-              final actDoc = await FirebaseFirestore.instance
-                  .collection('activities')
-                  .doc(activityId)
-                  .get();
-              if (actDoc.exists) {
-                final act = actDoc.data();
-                title = act?['title'] as String?;
-                type = act?['type'] as String?;
+        try {
+          final List<Map<String, dynamic>> results = [];
+          
+          // Sort documents by completedAt if available, otherwise by document ID
+          final sortedDocs = snapshot.docs.toList()
+            ..sort((a, b) {
+              final aCompleted = a.data()['completedAt'];
+              final bCompleted = b.data()['completedAt'];
+              
+              if (aCompleted == null && bCompleted == null) return 0;
+              if (aCompleted == null) return 1;
+              if (bCompleted == null) return -1;
+              
+              DateTime aDate;
+              DateTime bDate;
+              
+              if (aCompleted is Timestamp) {
+                aDate = aCompleted.toDate();
+              } else if (aCompleted is DateTime) {
+                aDate = aCompleted;
+              } else {
+                return 1;
               }
-            } catch (_) {}
+              
+              if (bCompleted is Timestamp) {
+                bDate = bCompleted.toDate();
+              } else if (bCompleted is DateTime) {
+                bDate = bCompleted;
+              } else {
+                return -1;
+              }
+              
+              return bDate.compareTo(aDate); // Descending order
+            });
+          
+          // Take first 5
+          final limitedDocs = sortedDocs.take(5).toList();
+          
+          for (final doc in limitedDocs) {
+            final data = doc.data();
+            
+            // Check if title and type are already in the document (e.g., reading activities)
+            String? title = data['title'] as String?;
+            String? type = data['type'] as String?;
+            
+            // If not, try to fetch from activities collection
+            final activityId = data['activityId'] as String?;
+            if ((title == null || type == null) && activityId != null && activityId.isNotEmpty) {
+              try {
+                final actDoc = await FirebaseFirestore.instance
+                    .collection('activities')
+                    .doc(activityId)
+                    .get();
+                if (actDoc.exists) {
+                  final act = actDoc.data();
+                  title = title ?? act?['title'] as String?;
+                  type = type ?? act?['type'] as String?;
+                }
+              } catch (_) {
+                // If activity not found, use defaults
+                debugPrint('Activity not found: $activityId');
+              }
+            }
+            
+            // Ensure we have at least some title and type
+            title = title ?? 'Activity';
+            type = type ?? 'general';
+            
+            results.add({
+              ...data,
+              'title': title,
+              'type': type,
+            });
           }
-          results.add({
-            ...data,
-            if (title != null) 'title': title,
-            if (type != null) 'type': type,
-          });
+          return results;
+        } catch (e) {
+          debugPrint('Error processing activities: $e');
+          return <Map<String, dynamic>>[];
         }
-        return results;
+      }).handleError((error) {
+        debugPrint('Error in recent activities stream: $error');
+        return <Map<String, dynamic>>[];
       });
     } catch (e) {
       debugPrint('Error getting recent activities: $e');
@@ -1079,6 +1124,10 @@ class _HomeScreenState extends State<HomeScreen> {
         return Icons.psychology;
       case 'social':
         return Icons.people;
+      case 'reading':
+      case 'content':
+        return Icons.menu_book;
+      case 'general':
       default:
         return Icons.star;
     }

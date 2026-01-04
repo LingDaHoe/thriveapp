@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 class ProgressScreen extends StatefulWidget {
   const ProgressScreen({Key? key}) : super(key: key);
@@ -18,11 +19,11 @@ class _ProgressScreenState extends State<ProgressScreen> {
       final user = _auth.currentUser;
       if (user == null) return {};
 
-      // Get user profile for points
+      // Get user profile for points - use StreamBuilder for real-time updates
       final profileDoc = await _firestore.collection('profiles').doc(user.uid).get();
       final totalPoints = profileDoc.data()?['totalPoints'] ?? 0;
 
-      // Get completed activities count
+      // Get completed activities count (including reading activities)
       final activitiesSnapshot = await _firestore
           .collection('activityProgress')
           .doc(user.uid)
@@ -31,29 +32,70 @@ class _ProgressScreenState extends State<ProgressScreen> {
           .get();
       final completedActivities = activitiesSnapshot.docs.length;
 
-      // Get activities by type
+      // Get activities by type and count articles read
       final activityTypes = <String, int>{};
+      final Set<String> uniqueArticleIds = {};
+      
       for (final doc in activitiesSnapshot.docs) {
         final data = doc.data();
+        final type = data['type'] as String?;
+        
+        // Count reading activities as articles read
+        if (type == 'reading' || type == 'content') {
+          final activityId = data['activityId'] as String?;
+          if (activityId != null) {
+            uniqueArticleIds.add(activityId);
+          }
+        }
+        
+        // Get activity type from activityId if not directly available
         final activityId = data['activityId'] as String?;
-        if (activityId != null) {
-          final actDoc = await _firestore.collection('activities').doc(activityId).get();
-          final type = actDoc.data()?['type'] as String? ?? 'general';
+        if (activityId != null && type == null) {
+          try {
+            final actDoc = await _firestore.collection('activities').doc(activityId).get();
+            final actType = actDoc.data()?['type'] as String? ?? 'general';
+            activityTypes[actType] = (activityTypes[actType] ?? 0) + 1;
+          } catch (_) {
+            // If activity not found, use type from data or default
+            final fallbackType = data['type'] as String? ?? 'general';
+            activityTypes[fallbackType] = (activityTypes[fallbackType] ?? 0) + 1;
+          }
+        } else if (type != null) {
           activityTypes[type] = (activityTypes[type] ?? 0) + 1;
+        } else {
+          activityTypes['general'] = (activityTypes['general'] ?? 0) + 1;
         }
       }
 
-      // Get read content count
-      final contentProgressSnapshot = await _firestore
-          .collection('contentProgress')
-          .doc(user.uid)
-          .collection('items')
-          .get();
-      final readContent = contentProgressSnapshot.docs.length;
+      // Also check contentProgress collection for articles read
+      try {
+        final contentProgressSnapshot = await _firestore
+            .collection('users')
+            .doc(user.uid)
+            .collection('contentProgress')
+            .get();
+        for (final doc in contentProgressSnapshot.docs) {
+          uniqueArticleIds.add(doc.id);
+        }
+      } catch (_) {
+        // Fallback to old collection path
+        try {
+          final contentProgressSnapshot = await _firestore
+              .collection('contentProgress')
+              .doc(user.uid)
+              .collection('items')
+              .get();
+          for (final doc in contentProgressSnapshot.docs) {
+            uniqueArticleIds.add(doc.id);
+          }
+        } catch (_) {}
+      }
+      
+      final readContent = uniqueArticleIds.length;
 
       // Get active streak (days with at least one completed activity)
       final now = DateTime.now();
-      final last30Days = now.subtract(const Duration(days: 30));
+      final last30Days = Timestamp.fromDate(now.subtract(const Duration(days: 30)));
       final recentActivities = await _firestore
           .collection('activityProgress')
           .doc(user.uid)
@@ -63,33 +105,46 @@ class _ProgressScreenState extends State<ProgressScreen> {
           .orderBy('completedAt', descending: true)
           .get();
 
-      // Calculate streak
-      int currentStreak = 0;
-      DateTime? lastDate;
+      // Calculate streak - count unique days with activities
+      final Set<String> activityDays = {};
       for (final doc in recentActivities.docs) {
-        final completedAt = (doc.data()['completedAt'] as Timestamp).toDate();
-        final completedDate = DateTime(completedAt.year, completedAt.month, completedAt.day);
-        
-        if (lastDate == null) {
-          // First activity
-          final today = DateTime(now.year, now.month, now.day);
-          if (completedDate == today || completedDate == today.subtract(const Duration(days: 1))) {
-            currentStreak = 1;
-            lastDate = completedDate;
+        final completedAt = doc.data()['completedAt'];
+        if (completedAt != null) {
+          DateTime completedDate;
+          if (completedAt is Timestamp) {
+            completedDate = completedAt.toDate();
+          } else if (completedAt is DateTime) {
+            completedDate = completedAt;
           } else {
-            break;
+            continue;
           }
-        } else {
-          final diff = lastDate.difference(completedDate).inDays;
+          final dayKey = '${completedDate.year}-${completedDate.month}-${completedDate.day}';
+          activityDays.add(dayKey);
+        }
+      }
+
+      // Calculate current streak by checking consecutive days
+      int currentStreak = 0;
+      final today = DateTime(now.year, now.month, now.day);
+      DateTime checkDate = today;
+      
+      // Sort activity days
+      final sortedDays = activityDays.map((dayKey) {
+        final parts = dayKey.split('-');
+        return DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+      }).toList()..sort((a, b) => b.compareTo(a));
+      
+      for (final activityDay in sortedDays) {
+        final diff = checkDate.difference(activityDay).inDays;
+        if (diff == 0 || diff == 1) {
           if (diff == 1) {
             currentStreak++;
-            lastDate = completedDate;
-          } else if (diff == 0) {
-            // Same day, continue
-            continue;
-          } else {
-            break;
+          } else if (diff == 0 && currentStreak == 0) {
+            currentStreak = 1;
           }
+          checkDate = activityDay;
+        } else {
+          break;
         }
       }
 
@@ -106,6 +161,171 @@ class _ProgressScreenState extends State<ProgressScreen> {
     }
   }
 
+  Stream<Map<String, dynamic>> _getProgressDataStream() {
+    final user = _auth.currentUser;
+    if (user == null) return Stream.value({});
+
+    // Stream activities for real-time updates - handle errors gracefully
+    final activitiesStream = _firestore
+        .collection('activityProgress')
+        .doc(user.uid)
+        .collection('activities')
+        .where('status', isEqualTo: 'completed')
+        .snapshots()
+        .handleError((error) {
+      debugPrint('Error in activities stream: $error');
+      return <QuerySnapshot>[];
+    });
+
+    // Combine streams manually
+    return activitiesStream.asyncMap((activitiesSnapshot) async {
+      try {
+        // Get latest profile data
+        final profileDoc = await _firestore.collection('profiles').doc(user.uid).get();
+        final totalPoints = profileDoc.data()?['totalPoints'] ?? 0;
+
+        // Get latest content progress
+        QuerySnapshot contentSnapshot;
+        try {
+          contentSnapshot = await _firestore
+              .collection('users')
+              .doc(user.uid)
+              .collection('contentProgress')
+              .get();
+        } catch (_) {
+          // Fallback to old collection path
+          try {
+            contentSnapshot = await _firestore
+                .collection('contentProgress')
+                .doc(user.uid)
+                .collection('items')
+                .get();
+          } catch (__) {
+            // Return empty snapshot if both fail
+            contentSnapshot = await _firestore
+                .collection('users')
+                .doc(user.uid)
+                .collection('contentProgress')
+                .limit(0)
+                .get();
+          }
+        }
+
+        final completedActivities = activitiesSnapshot.docs.length;
+
+        // Get activities by type and count articles read
+        final activityTypes = <String, int>{};
+        final Set<String> uniqueArticleIds = {};
+        
+        for (final doc in activitiesSnapshot.docs) {
+          final data = doc.data() as Map<String, dynamic>;
+          final type = data['type'] as String?;
+          
+          // Count reading activities as articles read
+          if (type == 'reading' || type == 'content') {
+            final activityId = data['activityId'] as String?;
+            if (activityId != null) {
+              uniqueArticleIds.add(activityId);
+            }
+          }
+          
+          // Get activity type
+          final activityId = data['activityId'] as String?;
+          if (activityId != null && type == null) {
+            try {
+              final actDoc = await _firestore.collection('activities').doc(activityId).get();
+              final actType = actDoc.data()?['type'] as String? ?? 'general';
+              activityTypes[actType] = (activityTypes[actType] ?? 0) + 1;
+            } catch (_) {
+              final fallbackType = data['type'] as String? ?? 'general';
+              activityTypes[fallbackType] = (activityTypes[fallbackType] ?? 0) + 1;
+            }
+          } else if (type != null) {
+            activityTypes[type] = (activityTypes[type] ?? 0) + 1;
+          } else {
+            activityTypes['general'] = (activityTypes['general'] ?? 0) + 1;
+          }
+        }
+
+        // Add articles from contentProgress
+        for (final doc in contentSnapshot.docs) {
+          uniqueArticleIds.add(doc.id);
+        }
+        
+        final readContent = uniqueArticleIds.length;
+
+        // Calculate streak
+        final now = DateTime.now();
+        final Set<String> activityDays = {};
+        for (final doc in activitiesSnapshot.docs) {
+          final completedAt = doc.data()['completedAt'];
+          if (completedAt != null) {
+            DateTime completedDate;
+            if (completedAt is Timestamp) {
+              completedDate = completedAt.toDate();
+            } else if (completedAt is DateTime) {
+              completedDate = completedAt;
+            } else {
+              continue;
+            }
+            final dayKey = '${completedDate.year}-${completedDate.month}-${completedDate.day}';
+            activityDays.add(dayKey);
+          }
+        }
+
+        int currentStreak = 0;
+        final today = DateTime(now.year, now.month, now.day);
+        DateTime checkDate = today;
+        
+        final sortedDays = activityDays.map((dayKey) {
+          final parts = dayKey.split('-');
+          return DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+        }).toList()..sort((a, b) => b.compareTo(a));
+        
+        for (final activityDay in sortedDays) {
+          final diff = checkDate.difference(activityDay).inDays;
+          if (diff == 0 || diff == 1) {
+            if (diff == 1) {
+              currentStreak++;
+            } else if (diff == 0 && currentStreak == 0) {
+              currentStreak = 1;
+            }
+            checkDate = activityDay;
+          } else {
+            break;
+          }
+        }
+
+        return {
+          'totalPoints': totalPoints,
+          'completedActivities': completedActivities,
+          'readContent': readContent,
+          'currentStreak': currentStreak,
+          'activityTypes': activityTypes,
+        };
+      } catch (e) {
+        debugPrint('Error in progress data stream: $e');
+        // Return default values on error
+        return {
+          'totalPoints': 0,
+          'completedActivities': 0,
+          'readContent': 0,
+          'currentStreak': 0,
+          'activityTypes': <String, int>{},
+        };
+      }
+    }).handleError((error) {
+      debugPrint('Error in progress stream: $error');
+      return {
+        'totalPoints': 0,
+        'completedActivities': 0,
+        'readContent': 0,
+        'currentStreak': 0,
+        'activityTypes': <String, int>{},
+      };
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -113,14 +333,32 @@ class _ProgressScreenState extends State<ProgressScreen> {
         title: const Text('Track Progress'),
         centerTitle: true,
       ),
-      body: FutureBuilder<Map<String, dynamic>>(
-        future: _getProgressData(),
+      body: StreamBuilder<Map<String, dynamic>>(
+        stream: _getProgressDataStream(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          if (snapshot.hasError || !snapshot.hasData) {
+          if (snapshot.hasError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                  const SizedBox(height: 16),
+                  Text('Error loading progress data: ${snapshot.error}'),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () => setState(() {}),
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          if (!snapshot.hasData || snapshot.data == null || snapshot.data!.isEmpty) {
             return const Center(
               child: Text('Unable to load progress data'),
             );

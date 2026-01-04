@@ -198,7 +198,16 @@ class EmergencyBloc extends Bloc<EmergencyEvent, EmergencyState> {
         }
 
         try {
-          // Notify contacts
+          // Immediately call primary emergency contact if available
+          final primaryContacts = state.contacts.where((c) => c.isPrimary).toList();
+          if (primaryContacts.isNotEmpty) {
+            await _emergencyService.callPrimaryEmergencyContact(primaryContacts.first);
+          } else if (state.contacts.isNotEmpty) {
+            // If no primary, call first contact
+            await _emergencyService.callPrimaryEmergencyContact(state.contacts.first);
+          }
+
+          // Notify all contacts (SMS/Email)
           await _emergencyService.notifyEmergencyContacts(
             state.contacts,
             location,

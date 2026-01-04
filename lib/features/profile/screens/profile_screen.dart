@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../blocs/profile_bloc.dart';
 import '../models/profile_model.dart';
+import '../services/profile_service.dart';
 import '../../auth/blocs/auth_bloc.dart';
 import '../../admin/services/admin_service.dart';
 import '../../../config/theme_provider.dart';
@@ -322,12 +323,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               );
                             },
                           ),
-                          ListTile(
-                            title: const Text('Font Size'),
-                            subtitle: Text(profile.settings.fontSize),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: () {
-                              _showFontSizeDialog(profile);
+                          Consumer<ThemeProvider>(
+                            builder: (context, themeProvider, child) {
+                              return ListTile(
+                                title: const Text('Font Size'),
+                                subtitle: Text(
+                                  themeProvider.fontSize[0].toUpperCase() + 
+                                  themeProvider.fontSize.substring(1),
+                                ),
+                                trailing: const Icon(Icons.chevron_right),
+                                onTap: () {
+                                  _showFontSizeDialog(profile);
+                                },
+                              );
                             },
                           ),
                           SwitchListTile(
@@ -353,7 +361,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             title: const Text('FAQs'),
                             trailing: const Icon(Icons.chevron_right),
                             onTap: () {
-                              // TODO: Navigate to FAQs screen
+                              context.push('/help/faq');
                             },
                           ),
                           ListTile(
@@ -361,7 +369,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             title: const Text('Contact Support'),
                             trailing: const Icon(Icons.chevron_right),
                             onTap: () {
-                              // TODO: Navigate to support screen
+                              context.push('/help/support');
                             },
                           ),
                           ListTile(
@@ -369,7 +377,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             title: const Text('Privacy Policy'),
                             trailing: const Icon(Icons.chevron_right),
                             onTap: () {
-                              // TODO: Navigate to privacy policy screen
+                              context.push('/help/privacy');
                             },
                           ),
                           ListTile(
@@ -377,7 +385,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             title: const Text('Terms of Service'),
                             trailing: const Icon(Icons.chevron_right),
                             onTap: () {
-                              // TODO: Navigate to terms of service screen
+                              context.push('/help/terms');
                             },
                           ),
                         ],
@@ -408,7 +416,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             leading: const Icon(Icons.add),
                             title: const Text('Add Emergency Contact'),
                             onTap: () {
-                              // TODO: Implement add emergency contact
+                              _showAddEmergencyContactDialog();
                             },
                           ),
                         ],
@@ -556,6 +564,119 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: const Text('Logout'),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showAddEmergencyContactDialog() {
+    final nameController = TextEditingController();
+    final phoneController = TextEditingController();
+    final relationshipController = TextEditingController();
+    bool isPrimary = false;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Add Emergency Contact'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Name',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: phoneController,
+                  decoration: const InputDecoration(
+                    labelText: 'Phone Number',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.phone,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: relationshipController,
+                  decoration: const InputDecoration(
+                    labelText: 'Relationship',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SwitchListTile(
+                  title: const Text('Primary Contact'),
+                  value: isPrimary,
+                  onChanged: (value) {
+                    setState(() {
+                      isPrimary = value;
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                nameController.dispose();
+                phoneController.dispose();
+                relationshipController.dispose();
+                Navigator.pop(context);
+              },
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (nameController.text.isNotEmpty &&
+                    phoneController.text.isNotEmpty &&
+                    relationshipController.text.isNotEmpty) {
+                  final contact = EmergencyContact(
+                    name: nameController.text,
+                    phoneNumber: phoneController.text,
+                    relationship: relationshipController.text,
+                    isPrimary: isPrimary,
+                  );
+
+                  try {
+                    final profileService = ProfileService();
+                    await profileService.addEmergencyContact(contact);
+                    if (!mounted) return;
+                    Navigator.pop(context);
+                    // Reload profile
+                    context.read<ProfileBloc>().add(LoadProfile());
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Emergency contact added successfully'),
+                      ),
+                    );
+                  } catch (e) {
+                    if (!mounted) return;
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error adding contact: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Please fill in all fields'),
+                      backgroundColor: Colors.orange,
+                    ),
+                  );
+                }
+              },
+              child: const Text('Add'),
+            ),
+          ],
+        ),
       ),
     );
   }

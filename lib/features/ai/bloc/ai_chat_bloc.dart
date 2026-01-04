@@ -38,11 +38,12 @@ class AIChatLoading extends AIChatState {}
 
 class AIChatLoaded extends AIChatState {
   final List<ChatMessage> messages;
+  final bool isLoading;
 
-  const AIChatLoaded(this.messages);
+  const AIChatLoaded(this.messages, {this.isLoading = false});
 
   @override
-  List<Object?> get props => [messages];
+  List<Object?> get props => [messages, isLoading];
 }
 
 class AIChatError extends AIChatState {
@@ -72,59 +73,52 @@ class AIChatBloc extends Bloc<AIChatEvent, AIChatState> {
   ) async {
     try {
       final currentState = state;
+      List<ChatMessage> currentMessages = [];
+      
       if (currentState is AIChatLoaded) {
-        // Add user message
-        final userMessage = ChatMessage(
-          id: _uuid.v4(),
-          content: event.message,
-          isUser: true,
-          timestamp: DateTime.now(),
-        );
-
-        final updatedMessages = List<ChatMessage>.from(currentState.messages)
-          ..add(userMessage);
-
-        emit(AIChatLoaded(updatedMessages));
-
-        // Get AI response
-        emit(AIChatLoading());
-        final aiResponse = await _aiService.getResponse(event.message);
-        
-        final aiMessage = ChatMessage(
-          id: _uuid.v4(),
-          content: aiResponse,
-          isUser: false,
-          timestamp: DateTime.now(),
-        );
-
-        updatedMessages.add(aiMessage);
-        emit(AIChatLoaded(updatedMessages));
-      } else {
-        // First message
-        final userMessage = ChatMessage(
-          id: _uuid.v4(),
-          content: event.message,
-          isUser: true,
-          timestamp: DateTime.now(),
-        );
-
-        emit(AIChatLoaded([userMessage]));
-
-        // Get AI response
-        emit(AIChatLoading());
-        final aiResponse = await _aiService.getResponse(event.message);
-        
-        final aiMessage = ChatMessage(
-          id: _uuid.v4(),
-          content: aiResponse,
-          isUser: false,
-          timestamp: DateTime.now(),
-        );
-
-        emit(AIChatLoaded([userMessage, aiMessage]));
+        currentMessages = List<ChatMessage>.from(currentState.messages);
       }
+      
+      // Add user message
+      final userMessage = ChatMessage(
+        id: _uuid.v4(),
+        content: event.message,
+        isUser: true,
+        timestamp: DateTime.now(),
+      );
+
+      currentMessages.add(userMessage);
+      emit(AIChatLoaded(currentMessages, isLoading: true));
+
+      // Get AI response
+      final aiResponse = await _aiService.getResponse(event.message);
+      
+      final aiMessage = ChatMessage(
+        id: _uuid.v4(),
+        content: aiResponse,
+        isUser: false,
+        timestamp: DateTime.now(),
+      );
+
+      currentMessages.add(aiMessage);
+      emit(AIChatLoaded(currentMessages, isLoading: false));
     } catch (e) {
-      emit(AIChatError(e.toString()));
+      // Get current messages
+      List<ChatMessage> currentMessages = [];
+      if (state is AIChatLoaded) {
+        currentMessages = (state as AIChatLoaded).messages;
+      }
+      
+      // Add error message as AI response
+      final errorMessage = ChatMessage(
+        id: _uuid.v4(),
+        content: '❌ Error: ${e.toString()}\n\nPlease try again or rephrase your question.',
+        isUser: false,
+        timestamp: DateTime.now(),
+      );
+      
+      currentMessages.add(errorMessage);
+      emit(AIChatLoaded(currentMessages, isLoading: false));
     }
   }
 

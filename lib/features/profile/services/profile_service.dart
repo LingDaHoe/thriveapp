@@ -96,7 +96,7 @@ class ProfileService {
     }
   }
 
-  // Add emergency contact
+  // Add emergency contact - syncs with both profile and emergency_contacts collection
   Future<void> addEmergencyContact(EmergencyContact contact) async {
     try {
       final user = _auth.currentUser;
@@ -121,15 +121,37 @@ class ProfileService {
       }
       contacts.add(contact);
 
+      // Update profile
       await _firestore.collection('profiles').doc(user.uid).update({
         'emergencyContacts': contacts.map((e) => e.toMap()).toList(),
       });
+
+      // Also sync to emergency_contacts collection
+      // Use contact's phoneNumber as document ID for consistency
+      final emergencyContactData = {
+        'id': contact.phoneNumber, // Use phoneNumber as ID for consistency
+        'name': contact.name,
+        'phoneNumber': contact.phoneNumber,
+        'relationship': contact.relationship,
+        'isPrimary': contact.isPrimary,
+        'email': null, // Profile contact doesn't have email
+        'createdAt': DateTime.now().toIso8601String(),
+        'updatedAt': DateTime.now().toIso8601String(),
+      };
+      
+      // Use phone number as document ID for easy lookup and sync
+      await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .collection('emergency_contacts')
+          .doc(contact.phoneNumber)
+          .set(emergencyContactData, SetOptions(merge: true));
     } catch (e) {
       throw Exception('Failed to add emergency contact: $e');
     }
   }
 
-  // Remove emergency contact
+  // Remove emergency contact - syncs with both profile and emergency_contacts collection
   Future<void> removeEmergencyContact(String phoneNumber) async {
     try {
       final user = _auth.currentUser;
@@ -142,11 +164,53 @@ class ProfileService {
           .where((contact) => contact.phoneNumber != phoneNumber)
           .toList();
 
+      // Update profile
+      await _firestore.collection('profiles').doc(user.uid).update({
+        'emergencyContacts': contacts.map((e) => e.toMap()).toList(),
+      });
+
+      // Also remove from emergency_contacts collection
+      await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .collection('emergency_contacts')
+          .doc(phoneNumber)
+          .delete();
+    } catch (e) {
+      throw Exception('Failed to remove emergency contact: $e');
+    }
+  }
+
+  // Sync emergency contacts from emergency_contacts collection to profile
+  Future<void> syncEmergencyContactsFromCollection() async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) throw Exception('No authenticated user');
+
+      // Get contacts from emergency_contacts collection
+      final contactsSnapshot = await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .collection('emergency_contacts')
+          .get();
+
+      final List<EmergencyContact> contacts = [];
+      for (final doc in contactsSnapshot.docs) {
+        final data = doc.data();
+        contacts.add(EmergencyContact(
+          name: data['name'] ?? '',
+          relationship: data['relationship'] ?? '',
+          phoneNumber: data['phoneNumber'] ?? doc.id,
+          isPrimary: data['isPrimary'] ?? false,
+        ));
+      }
+
+      // Update profile with synced contacts
       await _firestore.collection('profiles').doc(user.uid).update({
         'emergencyContacts': contacts.map((e) => e.toMap()).toList(),
       });
     } catch (e) {
-      throw Exception('Failed to remove emergency contact: $e');
+      throw Exception('Failed to sync emergency contacts: $e');
     }
   }
 

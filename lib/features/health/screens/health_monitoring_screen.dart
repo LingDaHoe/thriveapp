@@ -248,30 +248,46 @@ class _HealthMonitoringScreenState extends State<HealthMonitoringScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Body Metrics',
-              style: Theme.of(context).textTheme.titleLarge,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Body Metrics',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.edit),
+                  onPressed: () => _showBodyMetricsInputDialog(),
+                  tooltip: 'Edit Weight & Height',
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             Row(
               children: [
                 Expanded(
+                  child: GestureDetector(
+                    onTap: () => _showWeightInputDialog(),
                   child: _buildMetricCard(
                     'Weight',
-                    '${_metrics['weight']?.toStringAsFixed(1) ?? 0}',
+                    _formatMetricValue(_metrics['weight']),
                     'kg',
                     Icons.monitor_weight,
                     Colors.brown,
                   ),
+                  ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
+                  child: GestureDetector(
+                    onTap: () => _showHeightInputDialog(),
                   child: _buildMetricCard(
                     'Height',
-                    '${_metrics['height']?.toStringAsFixed(1) ?? 0}',
+                    _formatMetricValue(_metrics['height']),
                     'cm',
                     Icons.height,
                     Colors.teal,
+                  ),
                   ),
                 ),
               ],
@@ -559,5 +575,238 @@ class _HealthMonitoringScreenState extends State<HealthMonitoringScreen> {
         ),
       ),
     );
+  }
+
+  void _showBodyMetricsInputDialog() {
+    final weightValue = _metrics['weight'];
+    final heightValue = _metrics['height'];
+    final weightController = TextEditingController(
+      text: (weightValue != null && weightValue is num && weightValue > 0) 
+          ? weightValue.toStringAsFixed(1) 
+          : '',
+    );
+    final heightController = TextEditingController(
+      text: (heightValue != null && heightValue is num && heightValue > 0)
+          ? heightValue.toStringAsFixed(1)
+          : '',
+    );
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Enter Body Metrics'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: weightController,
+                decoration: const InputDecoration(
+                  labelText: 'Weight (kg)',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.monitor_weight),
+                ),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: heightController,
+                decoration: const InputDecoration(
+                  labelText: 'Height (cm)',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.height),
+                ),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              weightController.dispose();
+              heightController.dispose();
+              Navigator.pop(context);
+            },
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final weight = double.tryParse(weightController.text);
+              final height = double.tryParse(heightController.text);
+              
+              if (weight != null && weight > 0 && height != null && height > 0) {
+                await _saveBodyMetrics(weight, height);
+                weightController.dispose();
+                heightController.dispose();
+                if (!mounted) return;
+                Navigator.pop(context);
+                _loadHealthData();
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please enter valid weight and height values'),
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showWeightInputDialog() {
+    final weightValue = _metrics['weight'];
+    final weightController = TextEditingController(
+      text: (weightValue != null && weightValue is num && weightValue > 0)
+          ? weightValue.toStringAsFixed(1)
+          : '',
+    );
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Enter Weight'),
+        content: TextField(
+          controller: weightController,
+          decoration: const InputDecoration(
+            labelText: 'Weight (kg)',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.monitor_weight),
+          ),
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              weightController.dispose();
+              Navigator.pop(context);
+            },
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final weight = double.tryParse(weightController.text);
+              
+              if (weight != null && weight > 0) {
+                final currentHeight = _metrics['height'] as double? ?? 0.0;
+                await _saveBodyMetrics(weight, currentHeight);
+                weightController.dispose();
+                if (!mounted) return;
+                Navigator.pop(context);
+                _loadHealthData();
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please enter a valid weight'),
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showHeightInputDialog() {
+    final heightValue = _metrics['height'];
+    final heightController = TextEditingController(
+      text: (heightValue != null && heightValue is num && heightValue > 0)
+          ? heightValue.toStringAsFixed(1)
+          : '',
+    );
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Enter Height'),
+        content: TextField(
+          controller: heightController,
+          decoration: const InputDecoration(
+            labelText: 'Height (cm)',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.height),
+          ),
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              heightController.dispose();
+              Navigator.pop(context);
+            },
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final height = double.tryParse(heightController.text);
+              
+              if (height != null && height > 0) {
+                final currentWeight = _metrics['weight'] as double? ?? 0.0;
+                await _saveBodyMetrics(currentWeight, height);
+                heightController.dispose();
+                if (!mounted) return;
+                Navigator.pop(context);
+                _loadHealthData();
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please enter a valid height'),
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatMetricValue(dynamic value) {
+    if (value == null) return '0';
+    if (value is num) {
+      return value.toStringAsFixed(1);
+    }
+    try {
+      final numValue = double.tryParse(value.toString());
+      return numValue != null ? numValue.toStringAsFixed(1) : '0';
+    } catch (_) {
+      return '0';
+    }
+  }
+
+  Future<void> _saveBodyMetrics(double weight, double height) async {
+    try {
+      final service = context.read<HealthMonitoringService>();
+      await service.saveBodyMetrics(weight, height);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Body metrics saved successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving body metrics: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 } 

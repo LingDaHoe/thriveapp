@@ -1,130 +1,117 @@
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:thriveapp/config/ai_config.dart';
 import 'package:flutter/foundation.dart';
 
 class AIService {
   final String _apiKey;
-  final String _apiUrl;
-  final List<Map<String, String>> _messageHistory = [];
+  final List<Map<String, dynamic>> _conversationHistory = [];
 
   AIService({
     required String apiKey,
-    String? apiUrl,
-  })  : _apiKey = apiKey,
-        _apiUrl = apiUrl ?? 'https://openrouter.ai/api/v1/chat/completions' {
+    String? apiUrl, // Ignored, we'll use the correct URL directly
+  }) : _apiKey = apiKey {
     if (kDebugMode) {
-      print('Initializing AIService with API key: ${_apiKey.substring(0, 10)}...');
+      print('AIService initialized with API key: ${_apiKey.substring(0, 10)}...');
     }
-    
-    // Add system message
-    _messageHistory.add({
-      'role': 'system',
-      'content': '''You are a helpful health and wellness assistant. Your role is to:
-1. Provide accurate, evidence-based information about health and wellness
-2. Offer personalized advice while respecting medical boundaries
-3. Support users in their health journey with practical tips
-4. Encourage healthy habits and lifestyle changes
-5. Help users understand their health data and medications
-6. Provide guidance on nutrition, exercise, and mental health
-7. Always prioritize user safety and recommend consulting healthcare professionals for medical advice
-
-Remember to:
-- Be empathetic and supportive
-- Use clear, easy-to-understand language
-- Provide actionable advice
-- Acknowledge limitations and uncertainties
-- Encourage professional medical consultation when appropriate''',
-    });
   }
 
-  Future<String> getResponse(String message) async {
+  Future<String> getResponse(String userMessage) async {
     try {
       if (kDebugMode) {
-        print('Making API request to: $_apiUrl');
-        print('Using API key: ${_apiKey.substring(0, 10)}...');
+        print('=== Gemini API Request ===');
+        print('User message: $userMessage');
       }
 
       // Add user message to history
-      _messageHistory.add({
+      _conversationHistory.add({
         'role': 'user',
-        'content': message,
+        'parts': [{'text': userMessage}]
       });
 
-      final response = await http.post(
-        Uri.parse(_apiUrl),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $_apiKey',
-          'HTTP-Referer': 'https://thriveapp.com', // Required by OpenRouter
-          'X-Title': 'Thrive App', // Required by OpenRouter
+      // Prepare the API request
+      final url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=$_apiKey';
+      
+      final requestBody = {
+        'contents': _conversationHistory,
+        'systemInstruction': {
+          'parts': [
+            {
+              'text': 'You are a helpful health and wellness assistant. Provide clear, concise, and supportive advice. Keep responses under 200 words.'
+            }
+          ]
         },
-        body: jsonEncode({
-          'model': 'mistralai/mistral-7b-instruct', // Using Mistral 7B which is free
-          'messages': _messageHistory,
-          'temperature': 0.5,
-          'max_tokens': 300,
-          'stream': false,
-        }),
+        'generationConfig': {
+          'temperature': 0.7,
+          'maxOutputTokens': 1000,
+        }
+      };
+
+      if (kDebugMode) {
+        print('Request URL: $url');
+        print('Request body: ${jsonEncode(requestBody)}');
+      }
+
+      // Make the API call
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(requestBody),
       );
 
       if (kDebugMode) {
-        print('Response status code: ${response.statusCode}');
+        print('Response status: ${response.statusCode}');
         print('Response body: ${response.body}');
       }
 
+      // Handle response
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final aiResponse = data['choices'][0]['message']['content'];
-
-        // Add AI response to history
-        _messageHistory.add({
-          'role': 'assistant',
-          'content': aiResponse,
-        });
-
-        // Keep only last 6 messages to reduce context length
-        if (_messageHistory.length > 6) {
-          _messageHistory.removeRange(1, 3); // Remove oldest user-assistant pair
+        final jsonResponse = jsonDecode(response.body);
+        
+        if (jsonResponse['candidates'] != null && 
+            jsonResponse['candidates'].isNotEmpty) {
+          
+          final candidate = jsonResponse['candidates'][0];
+          final content = candidate['content'];
+          
+          // Check if parts exist and have text
+          if (content != null && content['parts'] != null && content['parts'].isNotEmpty) {
+            final parts = content['parts'];
+            final text = parts[0]['text'];
+            
+            if (text != null && text.isNotEmpty) {
+              // Add assistant response to history
+              _conversationHistory.add({
+                'role': 'model',
+                'parts': [{'text': text}]
+              });
+              
+              return text;
+            }
+          }
+          
+          // If we get here, the response was empty or incomplete
+          if (kDebugMode) {
+            print('Empty response or missing parts. Full candidate: $candidate');
+          }
+          throw Exception('AI returned an empty response. Please try rephrasing your question.');
+        } else {
+          throw Exception('No response from Gemini');
         }
-
-        return aiResponse;
-      } else if (response.statusCode == 401) {
-        throw Exception('Authentication failed. Please check your OpenRouter API key. Response: ${response.body}');
       } else {
-        throw Exception('Failed to get AI response: ${response.statusCode} - ${response.body}');
+        final errorBody = jsonDecode(response.body);
+        throw Exception('API Error: ${errorBody['error']['message']}');
       }
     } catch (e) {
       if (kDebugMode) {
-        print('Error in getResponse: $e');
+        print('Error: $e');
       }
-      if (e is Exception) {
-        rethrow;
-      }
-      throw Exception('Error communicating with AI service: $e');
+      throw Exception('Failed to get AI response: $e');
     }
   }
 
   void clearHistory() {
-    _messageHistory.clear();
-    // Re-add system message
-    _messageHistory.add({
-      'role': 'system',
-      'content': '''You are a helpful health and wellness assistant. Your role is to:
-1. Provide accurate, evidence-based information about health and wellness
-2. Offer personalized advice while respecting medical boundaries
-3. Support users in their health journey with practical tips
-4. Encourage healthy habits and lifestyle changes
-5. Help users understand their health data and medications
-6. Provide guidance on nutrition, exercise, and mental health
-7. Always prioritize user safety and recommend consulting healthcare professionals for medical advice
-
-Remember to:
-- Be empathetic and supportive
-- Use clear, easy-to-understand language
-- Provide actionable advice
-- Acknowledge limitations and uncertainties
-- Encourage professional medical consultation when appropriate''',
-    });
+    _conversationHistory.clear();
   }
-} 
+
+  List<Map<String, dynamic>> get messageHistory => _conversationHistory;
+}

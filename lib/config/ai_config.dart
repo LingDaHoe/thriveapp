@@ -1,20 +1,17 @@
 import 'package:flutter/foundation.dart';
 
 class AIConfig {
-  static const String apiKey = String.fromEnvironment(
-    'OPENROUTER_API_KEY',
-    defaultValue: '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',
-  );
+  // Using Google Gemini API (Free tier available)
+  // Get your free API key from: https://makersuite.google.com/app/apikey
+  static const String apiKey = 'AIzaSyBIawQwJCKQhW47htS8FPdkIQ18DE-xOe8';
 
-  static const String apiUrl = String.fromEnvironment(
-    'OPENROUTER_API_URL',
-    defaultValue: 'https://openrouter.ai/api/v1/chat/completions',
-  );
+  static const String apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
 
   static bool get isConfigured {
-    final hasKey = apiKey.isNotEmpty;
+    final hasKey = apiKey.isNotEmpty && apiKey != 'YOUR_GEMINI_API_KEY_HERE';
     if (!hasKey && kDebugMode) {
-      print('Warning: OpenRouter API key is not configured. Please set OPENROUTER_API_KEY environment variable.');
+      print('Warning: Gemini API key is not configured.');
+      print('Get your free API key from: https://makersuite.google.com/app/apikey');
     }
     return hasKey;
   }

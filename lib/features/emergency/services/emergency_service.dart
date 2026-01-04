@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter/foundation.dart';
 import '../models/emergency_contact.dart';
 
 class EmergencyService {
@@ -37,29 +38,180 @@ class EmergencyService {
           .orderBy('isPrimary', descending: true)
           .orderBy('name')
           .snapshots()
-          .map((snapshot) => snapshot.docs
-              .map((doc) => EmergencyContact.fromJson(doc.data() as Map<String, dynamic>))
-              .toList());
+          .map((snapshot) {
+            return snapshot.docs.map((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+              // Ensure required fields exist
+              if (data['id'] == null) {
+                data['id'] = doc.id; // Use document ID if id field is missing
+              }
+              if (data['createdAt'] == null) {
+                data['createdAt'] = DateTime.now().toIso8601String();
+              }
+              if (data['updatedAt'] == null) {
+                data['updatedAt'] = DateTime.now().toIso8601String();
+              }
+              return EmergencyContact.fromJson(data);
+            }).toList();
+          });
     } catch (e) {
       // If the index is not created yet, fall back to a simpler query
       return _emergencyContactsCollection
           .snapshots()
-          .map((snapshot) => snapshot.docs
-              .map((doc) => EmergencyContact.fromJson(doc.data() as Map<String, dynamic>))
-              .toList());
+          .map((snapshot) {
+            return snapshot.docs.map((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+              // Ensure required fields exist
+              if (data['id'] == null) {
+                data['id'] = doc.id; // Use document ID if id field is missing
+              }
+              if (data['createdAt'] == null) {
+                data['createdAt'] = DateTime.now().toIso8601String();
+              }
+              if (data['updatedAt'] == null) {
+                data['updatedAt'] = DateTime.now().toIso8601String();
+              }
+              return EmergencyContact.fromJson(data);
+            }).toList();
+          });
     }
   }
 
   Future<void> addEmergencyContact(EmergencyContact contact) async {
-    await _emergencyContactsCollection.doc(contact.id).set(contact.toJson());
+    // Use phoneNumber as document ID for consistency with profile sync
+    // Store the original id in the document data, but use phoneNumber as doc ID
+    final contactData = contact.toJson();
+    contactData['id'] = contact.id; // Preserve original ID in data
+    
+    // Add to emergency_contacts collection using phoneNumber as document ID
+    await _emergencyContactsCollection.doc(contact.phoneNumber).set(contactData);
+    
+    // Also sync to profile
+    await _syncToProfile(contact);
+  }
+
+  Future<void> _syncToProfile(EmergencyContact contact) async {
+    try {
+      final userId = _auth.currentUser?.uid;
+      if (userId == null) return;
+
+      final profileDoc = await _firestore.collection('profiles').doc(userId).get();
+      if (!profileDoc.exists) return;
+
+      final profileData = profileDoc.data();
+      if (profileData == null) return;
+
+      final existingContacts = (profileData['emergencyContacts'] as List<dynamic>?) ?? [];
+      
+      // Check if contact already exists in profile (by phoneNumber)
+      final contactIndex = existingContacts.indexWhere(
+        (c) => (c as Map<String, dynamic>)['phoneNumber'] == contact.phoneNumber,
+      );
+
+      // Convert EmergencyContact to profile format (profile uses simpler format)
+      final profileContact = {
+        'name': contact.name,
+        'phoneNumber': contact.phoneNumber,
+        'relationship': contact.relationship,
+        'isPrimary': contact.isPrimary,
+      };
+
+      if (contactIndex >= 0) {
+        // Update existing contact
+        existingContacts[contactIndex] = profileContact;
+      } else {
+        // Add new contact
+        existingContacts.add(profileContact);
+      }
+
+      // If this is primary, remove primary from others
+      if (contact.isPrimary) {
+        for (var i = 0; i < existingContacts.length; i++) {
+          if (i != contactIndex && (existingContacts[i] as Map)['isPrimary'] == true) {
+            existingContacts[i]['isPrimary'] = false;
+          }
+        }
+      }
+
+      // Update profile
+      await _firestore.collection('profiles').doc(userId).update({
+        'emergencyContacts': existingContacts,
+      });
+      
+      debugPrint('Successfully synced emergency contact to profile: ${contact.name}');
+    } catch (e) {
+      debugPrint('Error syncing emergency contact to profile: $e');
+      // Don't throw - sync failure shouldn't block adding contact
+    }
   }
 
   Future<void> updateEmergencyContact(EmergencyContact contact) async {
-    await _emergencyContactsCollection.doc(contact.id).update(contact.toJson());
+    // Update in emergency_contacts collection using phoneNumber as document ID
+    final contactData = contact.toJson();
+    contactData['id'] = contact.id; // Preserve original ID in data
+    await _emergencyContactsCollection.doc(contact.phoneNumber).set(contactData, SetOptions(merge: true));
+    
+    // Also sync to profile
+    await _syncToProfile(contact);
   }
 
   Future<void> deleteEmergencyContact(String id) async {
-    await _emergencyContactsCollection.doc(id).delete();
+    // id can be either UUID or phoneNumber
+    // Try to get the contact by id first, then try by phoneNumber
+    var contactDoc = await _emergencyContactsCollection.doc(id).get();
+    
+    // If not found, try searching by phoneNumber (in case id is phoneNumber)
+    if (!contactDoc.exists) {
+      // Search for document with matching phoneNumber
+      final snapshot = await _emergencyContactsCollection
+          .where('phoneNumber', isEqualTo: id)
+          .limit(1)
+          .get();
+      if (snapshot.docs.isNotEmpty) {
+        contactDoc = snapshot.docs.first;
+      }
+    }
+    
+    if (contactDoc.exists) {
+      final contactData = contactDoc.data() as Map<String, dynamic>?;
+      final phoneNumber = contactData?['phoneNumber'] as String? ?? id;
+      
+      // Delete from emergency_contacts collection using phoneNumber as doc ID
+      await _emergencyContactsCollection.doc(phoneNumber).delete();
+      
+      // Also remove from profile using phoneNumber
+      await _removeFromProfile(phoneNumber);
+    } else {
+      // Try to delete by id anyway (could be phoneNumber)
+      await _emergencyContactsCollection.doc(id).delete();
+      await _removeFromProfile(id);
+    }
+  }
+
+  Future<void> _removeFromProfile(String phoneNumber) async {
+    try {
+      final userId = _auth.currentUser?.uid;
+      if (userId == null) return;
+
+      final profileDoc = await _firestore.collection('profiles').doc(userId).get();
+      if (!profileDoc.exists) return;
+
+      final profileData = profileDoc.data();
+      final existingContacts = (profileData?['emergencyContacts'] as List<dynamic>?) ?? [];
+      
+      // Remove contact with matching phone number
+      existingContacts.removeWhere(
+        (c) => (c as Map<String, dynamic>)['phoneNumber'] == phoneNumber,
+      );
+
+      // Update profile
+      await _firestore.collection('profiles').doc(userId).update({
+        'emergencyContacts': existingContacts,
+      });
+    } catch (e) {
+      debugPrint('Error removing emergency contact from profile: $e');
+      // Don't throw - sync failure shouldn't block deletion
+    }
   }
 
   // Emergency Events
@@ -127,6 +279,43 @@ class EmergencyService {
     ].request();
 
     return statuses.values.every((status) => status.isGranted);
+  }
+
+  // Call primary emergency contact immediately
+  Future<void> callPrimaryEmergencyContact(EmergencyContact contact) async {
+    try {
+      // Request phone permission
+      final phoneStatus = await Permission.phone.request();
+      if (!phoneStatus.isGranted) {
+        debugPrint('Phone permission not granted');
+        return;
+      }
+
+      // Format phone number
+      String formattedPhone = contact.phoneNumber.replaceAll(RegExp(r'[^\d]'), '');
+      
+      // Handle Malaysian phone numbers
+      if (formattedPhone.startsWith('0')) {
+        formattedPhone = '+60${formattedPhone.substring(1)}';
+      } else if (formattedPhone.startsWith('60')) {
+        formattedPhone = '+$formattedPhone';
+      } else if (!formattedPhone.startsWith('+')) {
+        formattedPhone = '+60$formattedPhone';
+      }
+
+      // Make immediate phone call
+      final telUri = Uri.parse('tel:$formattedPhone');
+      final launched = await launchUrl(telUri, mode: LaunchMode.externalApplication);
+      
+      if (launched) {
+        debugPrint('Emergency call launched to: $formattedPhone');
+      } else {
+        debugPrint('Failed to launch emergency call');
+      }
+    } catch (e) {
+      debugPrint('Error making emergency call: $e');
+      // Don't throw - continue with other notifications
+    }
   }
 
   // Emergency Notifications

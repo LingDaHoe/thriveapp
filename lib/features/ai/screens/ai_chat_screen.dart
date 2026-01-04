@@ -386,7 +386,9 @@ class _AIChatScreenState extends State<AIChatScreen> {
               const SizedBox(width: 12),
               BlocBuilder<AIChatBloc, AIChatState>(
                 builder: (context, state) {
-                  if (state is AIChatLoading) {
+                  final isLoading = state is AIChatLoaded && state.isLoading;
+                  
+                  if (isLoading) {
                     return Container(
                       width: 48,
                       height: 48,

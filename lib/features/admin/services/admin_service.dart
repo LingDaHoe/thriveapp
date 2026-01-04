@@ -280,11 +280,16 @@ class AdminService {
   // Admin login (check if user exists in admins collection)
   Future<AdminUser?> adminLogin(String email, String password) async {
     try {
+      debugPrint('=== Admin Login Attempt ===');
+      debugPrint('Email: $email');
+      
       // Sign in with Firebase Auth
       final userCredential = await _auth.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
+      
+      debugPrint('Firebase Auth successful. UID: ${userCredential.user!.uid}');
 
       // Check if user is in admins collection
       final adminDoc = await _firestore
@@ -292,24 +297,36 @@ class AdminService {
           .doc(userCredential.user!.uid)
           .get();
 
+      debugPrint('Admin doc exists: ${adminDoc.exists}');
+
       if (!adminDoc.exists) {
         // Not an admin, sign out
+        debugPrint('User is not an admin. Signing out.');
         await _auth.signOut();
+        await clearAdminSession();
         return null;
       }
+
+      debugPrint('Admin user found: ${adminDoc.data()}');
 
       // Mark as admin in SharedPreferences
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('isAdmin', true);
+      debugPrint('Admin flag set in SharedPreferences');
 
       // Update last login
       await _firestore.collection('admins').doc(userCredential.user!.uid).update({
         'lastLogin': FieldValue.serverTimestamp(),
       });
 
-      return AdminUser.fromFirestore(adminDoc);
+      final adminUser = AdminUser.fromFirestore(adminDoc);
+      debugPrint('Admin login successful: ${adminUser.displayName}');
+      
+      return adminUser;
     } catch (e) {
       debugPrint('Error during admin login: $e');
+      // Clear admin flag on error
+      await clearAdminSession();
       rethrow;
     }
   }

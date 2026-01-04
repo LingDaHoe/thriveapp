@@ -12,6 +12,7 @@ import '../features/consent/screens/consent_screen.dart';
 import '../features/profile/screens/profile_creation_screen.dart';
 import '../features/profile/screens/profile_screen.dart';
 import '../features/profile/screens/progress_screen.dart';
+import '../features/profile/screens/help_support_screens.dart';
 // Home & Dashboard
 import '../features/home/screens/home_screen.dart';
 // Activities
@@ -42,6 +43,8 @@ import '../features/admin/screens/admin_login_screen.dart';
 import '../features/admin/screens/admin_dashboard_screen.dart';
 import '../features/admin/screens/user_detail_screen.dart';
 import '../features/admin/services/admin_service.dart';
+// Utils
+import '../utils/create_admin.dart';
 
 class AppRouter {
   static GoRouter router(AuthNotifier authNotifier) {
@@ -53,45 +56,84 @@ class AppRouter {
         final isAuthRoute = ['/login', '/signup', '/forgot-password'].contains(state.matchedLocation);
         final isSplashRoute = state.matchedLocation == '/splash';
         final isAdminRoute = state.matchedLocation.startsWith('/admin');
+        final isAdminLogin = state.matchedLocation == '/admin/login';
         
         // Check if user is admin (from SharedPreferences)
         final isAdmin = await AdminService.isAdminSession();
+        
+        // Debug logging
+        print('🔍 Router Redirect Debug:');
+        print('  Location: ${state.matchedLocation}');
+        print('  Authenticated: $isAuthenticated');
+        print('  Is Admin: $isAdmin');
+        print('  Is Admin Route: $isAdminRoute');
+        print('  Is Admin Login: $isAdminLogin');
 
         // Handle splash screen
         if (isSplashRoute) {
           if (!isAuthenticated) {
+            print('  → Redirect: /login (not authenticated)');
             return '/login';
           }
           // Authenticated user on splash - redirect based on role
-          return isAdmin ? '/admin/dashboard' : '/home';
+          final redirect = isAdmin ? '/admin/dashboard' : '/home';
+          print('  → Redirect: $redirect (authenticated ${isAdmin ? "admin" : "user"})');
+          return redirect;
+        }
+
+        // Handle admin login page
+        if (isAdminLogin) {
+          if (isAuthenticated && isAdmin) {
+            // Already authenticated as admin, go to dashboard
+            print('  → Redirect: /admin/dashboard (already logged in as admin)');
+            return '/admin/dashboard';
+          }
+          // Not authenticated or not admin, allow access to login page
+          print('  → Allow: admin login page');
+          return null;
         }
 
         // Handle regular auth routes (not admin login)
         if (isAuthRoute) {
           if (isAuthenticated) {
             // Already authenticated, redirect to appropriate dashboard
-            return isAdmin ? '/admin/dashboard' : '/home';
+            final redirect = isAdmin ? '/admin/dashboard' : '/home';
+            print('  → Redirect: $redirect (authenticated on auth route)');
+            return redirect;
           }
+          print('  → Allow: auth route');
           return null; // Stay on auth page
         }
 
-        // Handle admin routes
-        if (isAdminRoute) {
-          // Admin routes handle their own authentication
-          // Let them through without redirect
-          return null;
+        // Handle other admin routes (dashboard, user details, etc)
+        if (isAdminRoute && !isAdminLogin) {
+          // Admin routes require authentication and admin status
+          if (!isAuthenticated) {
+            print('  → Redirect: /admin/login (not authenticated)');
+            return '/admin/login';
+          }
+          if (!isAdmin) {
+            print('  → Redirect: /home (not an admin)');
+            return '/home'; // Not an admin, redirect to regular dashboard
+          }
+          print('  → Allow: admin route (authenticated admin)');
+          return null; // Authenticated admin, allow access
         }
 
         // Handle regular protected routes
         if (!isAuthenticated) {
+          print('  → Redirect: /login (protected route, not authenticated)');
           return '/login';
         }
 
-        // If admin user tries to access regular user routes, redirect to admin dashboard
-        if (isAdmin && !isAdminRoute) {
+        // If authenticated admin tries to access regular user routes, redirect to admin dashboard
+        if (isAuthenticated && isAdmin && !isAdminRoute) {
+          print('  → Redirect: /admin/dashboard (admin accessing user route)');
           return '/admin/dashboard';
         }
 
+        // Regular authenticated user accessing regular routes
+        print('  → Allow: regular route');
         return null;
       },
       routes: [
@@ -131,6 +173,22 @@ class AppRouter {
         GoRoute(
           path: '/progress',
           builder: (context, state) => const ProgressScreen(),
+        ),
+        GoRoute(
+          path: '/help/faq',
+          builder: (context, state) => const FAQScreen(),
+        ),
+        GoRoute(
+          path: '/help/support',
+          builder: (context, state) => const ContactSupportScreen(),
+        ),
+        GoRoute(
+          path: '/help/privacy',
+          builder: (context, state) => const PrivacyPolicyScreen(),
+        ),
+        GoRoute(
+          path: '/help/terms',
+          builder: (context, state) => const TermsOfServiceScreen(),
         ),
         // Home
         GoRoute(
@@ -243,6 +301,11 @@ class AppRouter {
           builder: (context, state) => UserDetailScreen(
             userId: state.pathParameters['userId']!,
           ),
+        ),
+        // Utility Routes (for setup/debugging)
+        GoRoute(
+          path: '/setup/create-admin',
+          builder: (context, state) => const CreateAdminUserScreen(),
         ),
       ],
     );

@@ -42,11 +42,23 @@ class HealthMonitoringService {
 
   Future<bool> requestHealthPermissions() async {
     try {
-      // TODO: Request health platform permissions
-      debugPrint('Health permissions requested successfully');
-      return true;
+      debugPrint('Requesting health permissions...');
+      
+      // Request authorization for all health data types we need
+      final authorized = await health.requestAuthorization(_types);
+      
+      if (authorized) {
+        _permissionsGranted = true;
+        debugPrint('Health permissions granted successfully');
+      } else {
+        _permissionsGranted = false;
+        debugPrint('Health permissions not granted by user');
+      }
+      
+      return authorized;
     } catch (e) {
       debugPrint('Error requesting health permissions: $e');
+      _permissionsGranted = false;
       return false;
     }
   }
@@ -78,18 +90,49 @@ class HealthMonitoringService {
 
   Future<Map<String, dynamic>> getHealthMetrics() async {
     try {
-      if (!_permissionsGranted) {
+      final userId = _auth.currentUser?.uid;
+      if (userId == null) {
+        debugPrint('User not authenticated');
+        return _getDefaultMetrics();
+      }
+
+      // First, try to get weight and height from Firestore (user-entered data)
+      double? storedWeight;
+      double? storedHeight;
+      try {
+        final bodyMetricsDoc = await _firestore
+            .collection('users')
+            .doc(userId)
+            .collection('body_metrics')
+            .doc('current')
+            .get();
+        
+        if (bodyMetricsDoc.exists) {
+          final data = bodyMetricsDoc.data();
+          storedWeight = (data?['weight'] as num?)?.toDouble();
+          storedHeight = (data?['height'] as num?)?.toDouble();
+        }
+      } catch (e) {
+        debugPrint('Error reading stored body metrics: $e');
+      }
+
+      // Check and request permissions if needed
+      final hasPermissions = await checkHealthPermissions();
+      if (!hasPermissions) {
         final granted = await requestHealthPermissions();
         if (!granted) {
-          debugPrint('Health permissions not granted - returning default values');
-          // Return default values instead of throwing
+          debugPrint('Health permissions not granted - returning stored/default values');
+          // Return stored values or defaults
           return {
             'steps': 0,
             'heartRate': 0,
-            'sleep': 0.0,
+            'sleepHours': 0.0,
             'bloodPressure': {'systolic': 0, 'diastolic': 0},
             'bloodOxygen': 0.0,
             'bodyTemperature': 0.0,
+            'weight': storedWeight ?? 0.0,
+            'height': storedHeight ?? 0.0,
+            'bloodGlucose': 0.0,
           };
         }
       }
@@ -102,13 +145,32 @@ class HealthMonitoringService {
       final heartRate = await _getHeartRate(startOfDay, now);
       final sleepHours = await _getSleepHours(startOfDay, now);
       
+      // Get weight and height - prefer stored values, fallback to HealthKit
+      double weight = storedWeight ?? 0.0;
+      double height = storedHeight ?? 0.0;
+      
+      if (weight == 0.0) {
+        try {
+          weight = await _getWeight(startOfDay, now);
+        } catch (_) {}
+      }
+      
+      if (height == 0.0) {
+        try {
+          height = await _getHeight(startOfDay, now);
+        } catch (_) {}
+      }
+      
       final metrics = {
         'steps': steps,
         'heartRate': heartRate,
-        'sleep': sleepHours,
+        'sleepHours': sleepHours,
         'bloodPressure': {'systolic': 0, 'diastolic': 0},
         'bloodOxygen': 0.0,
         'bodyTemperature': 0.0,
+        'weight': weight,
+        'height': height,
+        'bloodGlucose': 0.0,
       };
       
       // Store metrics for historical tracking (only if we have valid data)
@@ -120,14 +182,48 @@ class HealthMonitoringService {
     } catch (e) {
       debugPrint('Error getting health metrics: $e');
       // Return default values on error instead of throwing
-      return {
-        'steps': 0,
-        'heartRate': 0,
-        'sleep': 0.0,
-        'bloodPressure': {'systolic': 0, 'diastolic': 0},
-        'bloodOxygen': 0.0,
-        'bodyTemperature': 0.0,
-      };
+      return _getDefaultMetrics();
+    }
+  }
+
+  Map<String, dynamic> _getDefaultMetrics() {
+    return {
+      'steps': 0,
+      'heartRate': 0,
+      'sleepHours': 0.0,
+      'bloodPressure': {'systolic': 0, 'diastolic': 0},
+      'bloodOxygen': 0.0,
+      'bodyTemperature': 0.0,
+      'weight': 0.0,
+      'height': 0.0,
+      'bloodGlucose': 0.0,
+    };
+  }
+
+  Future<void> saveBodyMetrics(double weight, double height) async {
+    try {
+      final userId = _auth.currentUser?.uid;
+      if (userId == null) throw Exception('User not authenticated');
+
+      // Save to Firestore
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('body_metrics')
+          .doc('current')
+          .set({
+        'weight': weight,
+        'height': height,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      // Note: HealthKit write functionality would require additional setup
+      // For now, we store user-entered data in Firestore which is the primary source
+
+      debugPrint('Body metrics saved: weight=$weight kg, height=$height cm');
+    } catch (e) {
+      debugPrint('Error saving body metrics: $e');
+      rethrow;
     }
   }
 

@@ -114,14 +114,11 @@ class ProfileBloc extends Bloc<ProfileEvent, ProfileState> {
   Future<void> _onAddEmergencyContact(AddEmergencyContact event, Emitter<ProfileState> emit) async {
     try {
       emit(ProfileLoading());
-      if (state is ProfileLoaded) {
-        final currentProfile = (state as ProfileLoaded).profile;
-        final updatedContacts = List<EmergencyContact>.from(currentProfile.emergencyContacts)
-          ..add(event.contact);
-        final updatedProfile = currentProfile.copyWith(emergencyContacts: updatedContacts);
-        await _profileService.updateProfile(updatedProfile);
-        emit(ProfileLoaded(updatedProfile));
-      }
+      // Use profile service method which handles bidirectional sync
+      await _profileService.addEmergencyContact(event.contact);
+      // Reload profile to get updated state
+      final profile = await _profileService.getProfile();
+      emit(ProfileLoaded(profile));
     } catch (e) {
       emit(ProfileError(e.toString()));
     }
@@ -130,15 +127,11 @@ class ProfileBloc extends Bloc<ProfileEvent, ProfileState> {
   Future<void> _onRemoveEmergencyContact(RemoveEmergencyContact event, Emitter<ProfileState> emit) async {
     try {
       emit(ProfileLoading());
-      if (state is ProfileLoaded) {
-        final currentProfile = (state as ProfileLoaded).profile;
-        final updatedContacts = currentProfile.emergencyContacts
-            .where((contact) => contact.phoneNumber != event.phoneNumber)
-            .toList();
-        final updatedProfile = currentProfile.copyWith(emergencyContacts: updatedContacts);
-        await _profileService.updateProfile(updatedProfile);
-        emit(ProfileLoaded(updatedProfile));
-      }
+      // Use profile service method which handles bidirectional sync
+      await _profileService.removeEmergencyContact(event.phoneNumber);
+      // Reload profile to get updated state
+      final profile = await _profileService.getProfile();
+      emit(ProfileLoaded(profile));
     } catch (e) {
       emit(ProfileError(e.toString()));
     }
