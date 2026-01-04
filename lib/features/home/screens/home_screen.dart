@@ -14,6 +14,7 @@ import 'package:thriveapp/features/health/screens/health_education_screen.dart';
 import 'package:thriveapp/features/health/services/health_content_service.dart';
 import 'package:thriveapp/features/health/screens/health_monitoring_screen.dart';
 import 'package:thriveapp/features/health/services/health_monitoring_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -25,6 +26,93 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  bool _hasRequestedHealthPermissions = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAndRequestHealthPermissions();
+  }
+
+  Future<void> _checkAndRequestHealthPermissions() async {
+    if (_hasRequestedHealthPermissions) return;
+    
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final hasRequestedBefore = prefs.getBool('health_permissions_requested') ?? false;
+      
+      if (!hasRequestedBefore) {
+        _hasRequestedHealthPermissions = true;
+        await prefs.setBool('health_permissions_requested', true);
+        
+        // Show permission request dialog
+        if (mounted) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _showHealthPermissionDialog();
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error checking health permissions: $e');
+    }
+  }
+
+  Future<void> _showHealthPermissionDialog() async {
+    if (!mounted) return;
+    
+    final service = HealthMonitoringService();
+    final shouldRequest = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Health Data Access'),
+        content: const Text(
+          'To provide you with the best health tracking experience, we need access to your health data (steps, heart rate, sleep, etc.) from Health Connect.\n\n'
+          'This allows us to display your health metrics and help you track your wellness progress.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Skip'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Grant Permission'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldRequest == true && mounted) {
+      try {
+        final granted = await service.requestHealthPermissions();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(granted
+                  ? 'Health permissions granted successfully'
+                  : 'Health permissions not granted. Please install Health Connect app (Android) or check device settings.'),
+              duration: const Duration(seconds: 5),
+              action: granted ? null : SnackBarAction(
+                label: 'OK',
+                onPressed: () {},
+              ),
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error requesting health permissions: ${e.toString()}\n\nNote: Health Connect may not be installed on this device.'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 6),
+            ),
+          );
+        }
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -500,17 +588,16 @@ class _HomeScreenState extends State<HomeScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: Theme.of(context).dividerColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Games',
-            style: TextStyle(
-              fontSize: 14,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
               fontWeight: FontWeight.w600,
             ),
           ),

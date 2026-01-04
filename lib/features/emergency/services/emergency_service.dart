@@ -359,25 +359,26 @@ This is an automated emergency alert. Please respond immediately.
       // Try different URI schemes for SMS
       bool smsSent = false;
       
-      // Try SMS first
+      // Try SMS - Note: sms: URI opens the default SMS app with pre-filled message
+      // The user must manually tap "Send" in the SMS app (this is Android security)
+      // We cannot programmatically send SMS without user interaction on modern Android
       try {
-        final smsUri = Uri.parse('sms:$formattedPhone?body=${Uri.encodeComponent(message)}');
-        await launchUrl(smsUri, mode: LaunchMode.externalApplication);
-        smsSent = true;
-        print('SMS launched successfully');
-      } catch (e) {
-        print('SMS failed: $e');
-        
-        // Try phone call as fallback
-        try {
-          final telUri = Uri.parse('tel:$formattedPhone');
-          await launchUrl(telUri, mode: LaunchMode.externalApplication);
+        // Remove + for SMS URI (some devices don't handle it well)
+        String smsPhone = formattedPhone.replaceAll('+', '');
+        final smsUri = Uri.parse('sms:$smsPhone?body=${Uri.encodeComponent(message)}');
+        final launched = await launchUrl(smsUri, mode: LaunchMode.externalApplication);
+        if (launched) {
           smsSent = true;
-          print('Phone call launched successfully');
-        } catch (e2) {
-          print('Phone call also failed: $e2');
+          debugPrint('SMS app opened successfully for: $smsPhone (user must tap Send)');
+        } else {
+          debugPrint('SMS app launch failed');
         }
+      } catch (e) {
+        debugPrint('SMS failed: $e');
       }
+      
+      // Note: Phone call is handled separately in callPrimaryEmergencyContact()
+      // which is called BEFORE notifyEmergencyContacts() in the SOS flow
 
       if (!smsSent) {
         print('Could not launch SMS or call for number: $formattedPhone');

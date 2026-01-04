@@ -42,24 +42,66 @@ class HealthMonitoringService {
 
   Future<bool> requestHealthPermissions() async {
     try {
-      debugPrint('Requesting health permissions...');
+      debugPrint('=== Health Permission Request Start ===');
+      debugPrint('Requesting health permissions for ${_types.length} data types...');
       
-      // Request authorization for all health data types we need
-      final authorized = await health.requestAuthorization(_types);
-      
-      if (authorized) {
-        _permissionsGranted = true;
-        debugPrint('Health permissions granted successfully');
-      } else {
+      // Check if Health Connect/HealthKit is available
+      try {
+        // Request authorization for all health data types we need
+        debugPrint('Calling health.requestAuthorization()...');
+        final authorized = await health.requestAuthorization(_types);
+        
+        debugPrint('Authorization result: $authorized');
+        
+        if (authorized) {
+          _permissionsGranted = true;
+          debugPrint('✅ Health permissions granted successfully');
+          
+          // Verify permissions by checking hasPermissions
+          final hasPerms = await health.hasPermissions(_types);
+          debugPrint('Permission verification (hasPermissions): $hasPerms');
+          
+          if (hasPerms != true) {
+            debugPrint('⚠️ Warning: requestAuthorization returned true but hasPermissions returned $hasPerms');
+          }
+        } else {
+          _permissionsGranted = false;
+          debugPrint('❌ Health permissions not granted by user (returned false)');
+          
+          // Try to check current permission status
+          try {
+            final hasPerms = await health.hasPermissions(_types);
+            debugPrint('Current permission status (hasPermissions): $hasPerms');
+          } catch (checkError) {
+            debugPrint('Error checking permission status: $checkError');
+          }
+        }
+        
+        return authorized;
+      } catch (authError) {
+        debugPrint('❌ Error during authorization request: $authError');
+        debugPrint('Error type: ${authError.runtimeType}');
+        debugPrint('Error details: ${authError.toString()}');
+        
+        // This might indicate Health Connect is not available
+        if (authError.toString().toLowerCase().contains('unavailable') || 
+            authError.toString().toLowerCase().contains('not installed') ||
+            authError.toString().toLowerCase().contains('not found')) {
+          debugPrint('⚠️ Health Connect may not be installed or available on this device');
+          debugPrint('💡 For Android: Install Health Connect from Play Store');
+          debugPrint('💡 For Honor phones: May need Honor Health app');
+        }
+        
         _permissionsGranted = false;
-        debugPrint('Health permissions not granted by user');
+        return false;
       }
-      
-      return authorized;
-    } catch (e) {
-      debugPrint('Error requesting health permissions: $e');
+    } catch (e, stackTrace) {
+      debugPrint('❌ Unexpected error requesting health permissions: $e');
+      debugPrint('Stack trace: $stackTrace');
       _permissionsGranted = false;
       return false;
+    } finally {
+      debugPrint('=== Health Permission Request End ===');
     }
   }
 
