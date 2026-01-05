@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/health_monitoring_service.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class HealthMonitoringScreen extends StatefulWidget {
   const HealthMonitoringScreen({super.key});
@@ -16,6 +17,7 @@ class _HealthMonitoringScreenState extends State<HealthMonitoringScreen> {
   bool _isLoading = true;
   String _error = '';
   String _selectedMetric = 'heartRate';
+  bool _hasPermissions = false;
 
   @override
   void initState() {
@@ -32,21 +34,34 @@ class _HealthMonitoringScreenState extends State<HealthMonitoringScreen> {
 
       final service = context.read<HealthMonitoringService>();
       
-      // First request permissions if needed
-      final hasPermissions = await service.requestHealthPermissions();
+      // Check permissions (don't block if not granted)
+      final hasPermissions = await service.checkHealthPermissions();
       if (!hasPermissions) {
+        // Try to request permissions, but continue even if denied
+        await service.requestHealthPermissions();
+        final recheckPermissions = await service.checkHealthPermissions();
         setState(() {
-          _error = 'Health permissions are required to access health data. Please grant permissions in your device settings.';
-          _isLoading = false;
+          _hasPermissions = recheckPermissions;
         });
-        return;
+      } else {
+        setState(() {
+          _hasPermissions = true;
+        });
       }
 
-      // Load current metrics
+      // Always load metrics (will return default/stored values if no permissions)
       final metrics = await service.getHealthMetrics();
       
-      // Load historical data
-      final historical = await service.getHistoricalHealthData();
+      // Try to load historical data (may fail if no permissions, that's OK)
+      Map<String, List<FlSpot>> historical = {};
+      try {
+        if (_hasPermissions) {
+          historical = await service.getHistoricalHealthData();
+        }
+      } catch (e) {
+        debugPrint('Could not load historical data: $e');
+        // Continue with empty historical data
+      }
       
       if (mounted) {
         setState(() {
@@ -121,17 +136,101 @@ class _HealthMonitoringScreenState extends State<HealthMonitoringScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // Show permission reminder banner if permissions not granted
+                        if (!_hasPermissions) ...[
+                          _buildPermissionReminderBanner(),
+                          const SizedBox(height: 16),
+                        ],
                         _buildVitalSignsSection(),
                         const SizedBox(height: 24),
                         _buildActivitySection(),
                         const SizedBox(height: 24),
                         _buildBodyMetricsSection(),
                         const SizedBox(height: 24),
-                        _buildHistoricalDataSection(),
+                        if (_hasPermissions) ...[
+                          _buildHistoricalDataSection(),
+                        ] else ...[
+                          Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                children: [
+                                  Icon(
+                                    Icons.lock_outline,
+                                    size: 48,
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Historical Data',
+                                    style: Theme.of(context).textTheme.titleMedium,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Enable health permissions to view historical health data charts',
+                                    textAlign: TextAlign.center,
+                                    style: Theme.of(context).textTheme.bodySmall,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
                 ),
+    );
+  }
+
+  Widget _buildPermissionReminderBanner() {
+    return Card(
+      color: Theme.of(context).colorScheme.primaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Icon(
+              Icons.info_outline,
+              color: Theme.of(context).colorScheme.onPrimaryContainer,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Enable Health Permissions',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Grant health data permissions in settings to see real-time health metrics from Health Connect.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            TextButton(
+              onPressed: () async {
+                await openAppSettings();
+              },
+              child: Text(
+                'Settings',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -624,9 +723,12 @@ class _HealthMonitoringScreenState extends State<HealthMonitoringScreen> {
         actions: [
           TextButton(
             onPressed: () {
-              weightController.dispose();
-              heightController.dispose();
               Navigator.pop(context);
+              // Dispose controllers after dialog closes
+              Future.microtask(() {
+                weightController.dispose();
+                heightController.dispose();
+              });
             },
             child: const Text('Cancel'),
           ),
@@ -636,11 +738,19 @@ class _HealthMonitoringScreenState extends State<HealthMonitoringScreen> {
               final height = double.tryParse(heightController.text);
               
               if (weight != null && weight > 0 && height != null && height > 0) {
-                await _saveBodyMetrics(weight, height);
-                weightController.dispose();
-                heightController.dispose();
-                if (!mounted) return;
+                // Close dialog first
                 Navigator.pop(context);
+                
+                // Save data
+                await _saveBodyMetrics(weight, height);
+                
+                // Dispose controllers after dialog is closed
+                Future.microtask(() {
+                  weightController.dispose();
+                  heightController.dispose();
+                });
+                
+                if (!mounted) return;
                 _loadHealthData();
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -683,8 +793,11 @@ class _HealthMonitoringScreenState extends State<HealthMonitoringScreen> {
         actions: [
           TextButton(
             onPressed: () {
-              weightController.dispose();
               Navigator.pop(context);
+              // Dispose controller after dialog closes
+              Future.microtask(() {
+                weightController.dispose();
+              });
             },
             child: const Text('Cancel'),
           ),
@@ -694,10 +807,19 @@ class _HealthMonitoringScreenState extends State<HealthMonitoringScreen> {
               
               if (weight != null && weight > 0) {
                 final currentHeight = _metrics['height'] as double? ?? 0.0;
-                await _saveBodyMetrics(weight, currentHeight);
-                weightController.dispose();
-                if (!mounted) return;
+                
+                // Close dialog first
                 Navigator.pop(context);
+                
+                // Save data
+                await _saveBodyMetrics(weight, currentHeight);
+                
+                // Dispose controller after dialog is closed
+                Future.microtask(() {
+                  weightController.dispose();
+                });
+                
+                if (!mounted) return;
                 _loadHealthData();
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -740,8 +862,11 @@ class _HealthMonitoringScreenState extends State<HealthMonitoringScreen> {
         actions: [
           TextButton(
             onPressed: () {
-              heightController.dispose();
               Navigator.pop(context);
+              // Dispose controller after dialog closes
+              Future.microtask(() {
+                heightController.dispose();
+              });
             },
             child: const Text('Cancel'),
           ),
@@ -751,10 +876,19 @@ class _HealthMonitoringScreenState extends State<HealthMonitoringScreen> {
               
               if (height != null && height > 0) {
                 final currentWeight = _metrics['weight'] as double? ?? 0.0;
-                await _saveBodyMetrics(currentWeight, height);
-                heightController.dispose();
-                if (!mounted) return;
+                
+                // Close dialog first
                 Navigator.pop(context);
+                
+                // Save data
+                await _saveBodyMetrics(currentWeight, height);
+                
+                // Dispose controller after dialog is closed
+                Future.microtask(() {
+                  heightController.dispose();
+                });
+                
+                if (!mounted) return;
                 _loadHealthData();
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(

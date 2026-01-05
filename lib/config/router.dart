@@ -20,6 +20,9 @@ import '../features/activities/screens/activities_screen.dart';
 import '../features/activities/screens/achievements_screen.dart';
 import '../features/activities/screens/memory_game_screen.dart';
 import '../features/activities/screens/word_puzzle_screen.dart';
+import '../features/activities/screens/create_social_activity_screen.dart';
+import '../features/activities/screens/social_activities_screen.dart';
+import '../features/activities/screens/group_chat_screen.dart';
 import '../features/activities/blocs/memory_game_bloc.dart';
 import '../features/activities/services/activity_service.dart';
 // Emergency
@@ -42,9 +45,13 @@ import '../features/health/screens/ai_recommendations_screen.dart';
 import '../features/admin/screens/admin_login_screen.dart';
 import '../features/admin/screens/admin_dashboard_screen.dart';
 import '../features/admin/screens/user_detail_screen.dart';
+import '../features/admin/screens/caregiver_registration_screen.dart';
+import '../features/admin/screens/caregiver_dashboard_screen.dart';
 import '../features/admin/services/admin_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 // Utils
 import '../utils/create_admin.dart';
+import '../utils/create_accounts_screen.dart';
 
 class AppRouter {
   static GoRouter router(AuthNotifier authNotifier) {
@@ -58,14 +65,54 @@ class AppRouter {
         final isAdminRoute = state.matchedLocation.startsWith('/admin');
         final isAdminLogin = state.matchedLocation == '/admin/login';
         
-        // Check if user is admin (from SharedPreferences)
-        final isAdmin = await AdminService.isAdminSession();
+        // Check if user is admin/caregiver (from SharedPreferences and Firestore)
+        final isAdminSession = await AdminService.isAdminSession();
+        
+        // CRITICAL: Check Firestore FIRST - it's the source of truth
+        bool isAdmin = false;
+        bool isCaregiver = false;
+        if (isAuthenticated) {
+          try {
+            final adminService = AdminService();
+            final adminUser = await adminService.getCurrentAdminUser();
+            if (adminUser != null) {
+              isAdmin = adminUser.isAdmin;
+              isCaregiver = adminUser.isCaretaker;
+              print('  → Firestore check: Admin=$isAdmin, Caregiver=$isCaregiver, Role=${adminUser.role}');
+              
+              // If Firestore says admin/caregiver but SharedPreferences doesn't, update it
+              if ((isAdmin || isCaregiver) && !isAdminSession) {
+                print('  → Updating SharedPreferences to match Firestore');
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setBool('isAdmin', true);
+                await prefs.setString('userRole', adminUser.role);
+              }
+            } else {
+              print('  → Firestore check: No admin user found for authenticated user');
+              // If SharedPreferences says admin but Firestore doesn't, clear it
+              if (isAdminSession) {
+                print('  → Clearing stale SharedPreferences admin flag');
+                await AdminService.clearAdminSession();
+              }
+            }
+          } catch (e) {
+            print('  → Firestore check error: $e');
+            // If check fails due to parsing error, try to fix the Firestore document
+            // But for now, use SharedPreferences as fallback
+            isAdmin = isAdminSession;
+            // Don't set isCaregiver from SharedPreferences fallback
+          }
+        } else {
+          isAdmin = isAdminSession;
+        }
         
         // Debug logging
         print('🔍 Router Redirect Debug:');
         print('  Location: ${state.matchedLocation}');
         print('  Authenticated: $isAuthenticated');
-        print('  Is Admin: $isAdmin');
+        print('  Is Admin Session: $isAdminSession');
+        print('  Is Admin (Firestore): $isAdmin');
+        print('  Is Caregiver: $isCaregiver');
         print('  Is Admin Route: $isAdminRoute');
         print('  Is Admin Login: $isAdminLogin');
 
@@ -76,19 +123,32 @@ class AppRouter {
             return '/login';
           }
           // Authenticated user on splash - redirect based on role
-          final redirect = isAdmin ? '/admin/dashboard' : '/home';
-          print('  → Redirect: $redirect (authenticated ${isAdmin ? "admin" : "user"})');
-          return redirect;
+          if (isAdmin) {
+            print('  → Redirect: /admin/dashboard (authenticated admin)');
+            return '/admin/dashboard';
+          } else if (isCaregiver) {
+            print('  → Redirect: /caregiver/dashboard (authenticated caregiver)');
+            return '/caregiver/dashboard';
+          } else {
+            print('  → Redirect: /home (authenticated user)');
+            return '/home';
+          }
         }
 
         // Handle admin login page
         if (isAdminLogin) {
-          if (isAuthenticated && isAdmin) {
-            // Already authenticated as admin, go to dashboard
-            print('  → Redirect: /admin/dashboard (already logged in as admin)');
-            return '/admin/dashboard';
+          if (isAuthenticated) {
+            if (isAdmin) {
+              // Already authenticated as admin, go to admin dashboard
+              print('  → Redirect: /admin/dashboard (already logged in as admin)');
+              return '/admin/dashboard';
+            } else if (isCaregiver) {
+              // Already authenticated as caregiver, go to caregiver dashboard
+              print('  → Redirect: /caregiver/dashboard (already logged in as caregiver)');
+              return '/caregiver/dashboard';
+            }
           }
-          // Not authenticated or not admin, allow access to login page
+          // Not authenticated or not admin/caregiver, allow access to login page
           print('  → Allow: admin login page');
           return null;
         }
@@ -97,9 +157,16 @@ class AppRouter {
         if (isAuthRoute) {
           if (isAuthenticated) {
             // Already authenticated, redirect to appropriate dashboard
-            final redirect = isAdmin ? '/admin/dashboard' : '/home';
-            print('  → Redirect: $redirect (authenticated on auth route)');
-            return redirect;
+            if (isAdmin) {
+              print('  → Redirect: /admin/dashboard (authenticated admin on auth route)');
+              return '/admin/dashboard';
+            } else if (isCaregiver) {
+              print('  → Redirect: /caregiver/dashboard (authenticated caregiver on auth route)');
+              return '/caregiver/dashboard';
+            } else {
+              print('  → Redirect: /home (authenticated user on auth route)');
+              return '/home';
+            }
           }
           print('  → Allow: auth route');
           return null; // Stay on auth page
@@ -112,12 +179,36 @@ class AppRouter {
             print('  → Redirect: /admin/login (not authenticated)');
             return '/admin/login';
           }
-          if (!isAdmin) {
-            print('  → Redirect: /home (not an admin)');
-            return '/home'; // Not an admin, redirect to regular dashboard
+          if (!isAdmin && !isCaregiver) {
+            print('  → Redirect: /home (not an admin or caregiver)');
+            return '/home'; // Not an admin/caregiver, redirect to regular dashboard
           }
-          print('  → Allow: admin route (authenticated admin)');
-          return null; // Authenticated admin, allow access
+          // Allow access if admin or caregiver
+          print('  → Allow: admin route (authenticated ${isAdmin ? "admin" : "caregiver"})');
+          return null;
+        }
+        
+        // CRITICAL: Check caregiver registration FIRST before other caregiver routes
+        // This allows public access to registration without authentication
+        final isCaregiverRegister = state.matchedLocation == '/caregiver/register';
+        if (isCaregiverRegister) {
+          print('  → Allow: caregiver registration (public route)');
+          return null; // Allow access to registration page without authentication
+        }
+        
+        // Handle other caregiver routes (dashboard, etc) - requires authentication
+        final isCaregiverRoute = state.matchedLocation.startsWith('/caregiver');
+        if (isCaregiverRoute) {
+          if (!isAuthenticated) {
+            print('  → Redirect: /admin/login (not authenticated for caregiver route)');
+            return '/admin/login';
+          }
+          if (!isCaregiver && !isAdmin) {
+            print('  → Redirect: /home (not a caregiver)');
+            return '/home';
+          }
+          print('  → Allow: caregiver route (authenticated ${isCaregiver ? "caregiver" : "admin"})');
+          return null;
         }
 
         // Handle regular protected routes
@@ -126,10 +217,16 @@ class AppRouter {
           return '/login';
         }
 
-        // If authenticated admin tries to access regular user routes, redirect to admin dashboard
-        if (isAuthenticated && isAdmin && !isAdminRoute) {
-          print('  → Redirect: /admin/dashboard (admin accessing user route)');
-          return '/admin/dashboard';
+        // CRITICAL: If authenticated admin/caregiver tries to access regular user routes, redirect to appropriate dashboard
+        // This catches cases where admin logs in but router hasn't redirected yet
+        if (isAuthenticated && (isAdmin || isCaregiver) && !isAdminRoute && !isCaregiverRoute) {
+          if (isAdmin) {
+            print('  → Redirect: /admin/dashboard (admin accessing user route - FORCE REDIRECT)');
+            return '/admin/dashboard';
+          } else if (isCaregiver) {
+            print('  → Redirect: /caregiver/dashboard (caregiver accessing user route - FORCE REDIRECT)');
+            return '/caregiver/dashboard';
+          }
         }
 
         // Regular authenticated user accessing regular routes
@@ -201,6 +298,19 @@ class AppRouter {
           builder: (context, state) => const ActivitiesScreen(),
         ),
         GoRoute(
+          path: '/activities/chat/:chatId',
+          builder: (context, state) {
+            final chatId = state.pathParameters['chatId']!;
+            final activityTitle = state.uri.queryParameters['title'] ?? 'Group Chat';
+            final activityId = state.uri.queryParameters['activityId'];
+            return GroupChatScreen(
+              chatId: chatId,
+              activityTitle: activityTitle,
+              activityId: activityId,
+            );
+          },
+        ),
+        GoRoute(
           path: '/achievements',
           builder: (context, state) => const AchievementsScreen(),
         ),
@@ -220,6 +330,14 @@ class AppRouter {
           builder: (context, state) => WordPuzzleScreen(
             activityId: state.pathParameters['id']!,
           ),
+        ),
+        GoRoute(
+          path: '/activities/create-social',
+          builder: (context, state) => const CreateSocialActivityScreen(),
+        ),
+        GoRoute(
+          path: '/activities/social',
+          builder: (context, state) => const SocialActivitiesScreen(),
         ),
         // Emergency
         GoRoute(
@@ -286,9 +404,14 @@ class AppRouter {
         ),
         GoRoute(
           path: '/admin/user/:userId',
-          builder: (context, state) => UserDetailScreen(
-            userId: state.pathParameters['userId']!,
-          ),
+          builder: (context, state) {
+            final userId = state.pathParameters['userId']!;
+            final tab = state.uri.queryParameters['tab'];
+            return UserDetailScreen(
+              userId: userId,
+              initialTab: tab, // Pass tab parameter
+            );
+          },
         ),
         GoRoute(
           path: '/admin/user/:userId/health',
@@ -302,10 +425,34 @@ class AppRouter {
             userId: state.pathParameters['userId']!,
           ),
         ),
+        // Caregiver Routes
+        GoRoute(
+          path: '/caregiver/register',
+          builder: (context, state) => const CaregiverRegistrationScreen(),
+        ),
+        GoRoute(
+          path: '/caregiver/dashboard',
+          builder: (context, state) => const CaregiverDashboardScreen(),
+        ),
+        GoRoute(
+          path: '/caregiver/user/:userId',
+          builder: (context, state) {
+            final userId = state.pathParameters['userId']!;
+            final tab = state.uri.queryParameters['tab'];
+            return UserDetailScreen(
+              userId: userId,
+              initialTab: tab,
+            );
+          },
+        ),
         // Utility Routes (for setup/debugging)
         GoRoute(
           path: '/setup/create-admin',
           builder: (context, state) => const CreateAdminUserScreen(),
+        ),
+        GoRoute(
+          path: '/setup/create-accounts',
+          builder: (context, state) => const CreateAccountsScreen(),
         ),
       ],
     );

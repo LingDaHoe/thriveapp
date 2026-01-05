@@ -281,7 +281,54 @@ class EmergencyService {
     return statuses.values.every((status) => status.isGranted);
   }
 
-  // Call primary emergency contact immediately
+  // Call all emergency contacts
+  Future<void> callAllEmergencyContacts(List<EmergencyContact> contacts) async {
+    try {
+      // Request phone permission
+      final phoneStatus = await Permission.phone.request();
+      if (!phoneStatus.isGranted) {
+        debugPrint('Phone permission not granted');
+        return;
+      }
+
+      // Call each contact sequentially (with small delay between calls)
+      for (int i = 0; i < contacts.length; i++) {
+        final contact = contacts[i];
+        
+        // Format phone number
+        String formattedPhone = contact.phoneNumber.replaceAll(RegExp(r'[^\d]'), '');
+        
+        // Handle Malaysian phone numbers
+        if (formattedPhone.startsWith('0')) {
+          formattedPhone = '+60${formattedPhone.substring(1)}';
+        } else if (formattedPhone.startsWith('60')) {
+          formattedPhone = '+$formattedPhone';
+        } else if (!formattedPhone.startsWith('+')) {
+          formattedPhone = '+60$formattedPhone';
+        }
+
+        // Make phone call
+        final telUri = Uri.parse('tel:$formattedPhone');
+        final launched = await launchUrl(telUri, mode: LaunchMode.externalApplication);
+        
+        if (launched) {
+          debugPrint('Emergency call launched to: $formattedPhone (${contact.name})');
+        } else {
+          debugPrint('Failed to launch emergency call to: $formattedPhone');
+        }
+        
+        // Add a small delay between calls (except for the last one)
+        if (i < contacts.length - 1) {
+          await Future.delayed(const Duration(milliseconds: 500));
+        }
+      }
+    } catch (e) {
+      debugPrint('Error making emergency calls: $e');
+      // Don't throw - continue with other notifications
+    }
+  }
+
+  // Call primary emergency contact immediately (deprecated - use callAllEmergencyContacts)
   Future<void> callPrimaryEmergencyContact(EmergencyContact contact) async {
     try {
       // Request phone permission

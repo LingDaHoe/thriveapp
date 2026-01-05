@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:video_player/video_player.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/health_content.dart';
 import '../services/health_content_service.dart';
 
@@ -47,8 +48,15 @@ class _HealthContentScreenState extends State<HealthContentScreen> {
           .getHealthContentById(widget.contentId);
 
       if (content.type == ContentType.video && content.mediaUrl != null) {
-        _videoController = VideoPlayerController.network(content.mediaUrl!);
-        await _videoController!.initialize();
+        // Check if it's a YouTube video (ID or URL)
+        if (_isYouTubeUrl(content.mediaUrl!)) {
+          // YouTube videos will be handled by WebView or url_launcher
+          // Don't initialize video controller for YouTube
+        } else {
+          // Regular video URL
+          _videoController = VideoPlayerController.network(content.mediaUrl!);
+          await _videoController!.initialize();
+        }
       } else if (content.type == ContentType.audio && content.mediaUrl != null) {
         _audioPlayer = AudioPlayer();
         await _audioPlayer!.setUrl(content.mediaUrl!);
@@ -357,10 +365,66 @@ class _HealthContentScreenState extends State<HealthContentScreen> {
     );
   }
 
+  bool _isYouTubeUrl(String url) {
+    return url.contains('youtube.com') || 
+           url.contains('youtu.be') || 
+           (url.length == 11 && RegExp(r'^[a-zA-Z0-9_-]+$').hasMatch(url));
+  }
+
+  String _getYouTubeEmbedUrl(String videoId) {
+    // Extract video ID if it's a full URL
+    String id = videoId;
+    if (videoId.contains('youtube.com') || videoId.contains('youtu.be')) {
+      final regExp = RegExp(r'(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})');
+      final match = regExp.firstMatch(videoId);
+      if (match != null) {
+        id = match.group(1)!;
+      }
+    }
+    return 'https://www.youtube.com/watch?v=$id';
+  }
+
   Widget _buildContentTypeWidget(HealthContent content) {
     switch (content.type) {
       case ContentType.video:
-        if (_videoController == null) {
+        // Check if it's a YouTube video
+        if (content.mediaUrl != null && _isYouTubeUrl(content.mediaUrl!)) {
+          // YouTube video - show embed button
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.play_circle_outline, size: 80, color: Colors.white),
+                const SizedBox(height: 16),
+                const Text(
+                  'YouTube Video',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    final url = _getYouTubeEmbedUrl(content.mediaUrl!);
+                    final uri = Uri.parse(url);
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                    }
+                  },
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text('Watch on YouTube'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: const Color(0xFF00BCD4),
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  ),
+                ),
+              ],
+            ),
+          );
+        } else if (_videoController == null) {
           return const Center(
             child: CircularProgressIndicator(color: Colors.white),
           );

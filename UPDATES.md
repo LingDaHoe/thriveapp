@@ -1907,3 +1907,48 @@ flutter build apk --release --no-tree-shake-icons
    - **Files Modified**: `lib/features/home/screens/home_screen.dart`
 
 **All urgent fixes have been implemented!** ✅
+
+✅ **Health Connect Implementation & Metrics Display Update (January 2025):**
+
+1. **Google Health Connect Integration** ✅
+   - **Status**: Already implemented and actively using Google Health Connect
+   - **Implementation Details**:
+     - Using `health` package (version 13.0.1) which provides Flutter interface to Health Connect on Android and HealthKit on iOS
+     - Health Connect is Google's unified health data platform for Android devices
+     - The `health` package automatically uses Health Connect on Android devices when available
+     - All Health Connect permissions are properly declared in `AndroidManifest.xml`
+     - Health data types supported: Steps, Heart Rate, Sleep, Blood Oxygen, Blood Pressure, Body Temperature, Weight, Height, BMI, Body Fat, and more
+   - **Note**: The `health` package is the standard Flutter package for Health Connect integration and works across different Android devices (including Honor phones if Health Connect is installed)
+   - **Files**: 
+     - `lib/features/health/services/health_monitoring_service.dart` (uses Health Connect via health package)
+     - `android/app/src/main/AndroidManifest.xml` (Health Connect permissions declared)
+     - `pubspec.yaml` (health: ^13.0.1 dependency)
+
+2. **Health Metrics Always Displayed (Even Without Permissions)** ✅
+   - **Issue**: Health metrics page was showing error and not displaying data when permissions weren't granted
+   - **Fix Applied**:
+     - Updated `_loadHealthData()` to always load and display metrics regardless of permission status
+     - Added permission status tracking (`_hasPermissions`) to conditionally show/hide features
+     - Metrics now display default/stored values (from Firestore) when permissions aren't granted
+     - Added prominent permission reminder banner at the top of the page when permissions aren't granted
+     - Banner includes:
+       - Info icon and clear messaging about enabling permissions
+       - Direct "Settings" button to open app settings for permission management
+       - Explains that Health Connect permissions are needed for real-time data
+     - Historical data charts are hidden when permissions aren't granted (shows placeholder message instead)
+     - All other metrics (Vital Signs, Activity, Body Metrics) are always displayed
+   - **User Experience**: Users can now see their health metrics page immediately, with a clear call-to-action to enable permissions for real-time Health Connect data
+   - **Files Modified**: `lib/features/health/screens/health_monitoring_screen.dart`
+   - **Additional**: Added `permission_handler` import for `openAppSettings()` functionality
+
+3. **Admin Health Metrics** ✅
+   - **Status**: Already implemented in admin dashboard
+   - Admin can view user health metrics via `/admin/user/{userId}` route
+   - Health metrics are displayed in the "Health Metrics" tab of user detail screen
+   - Admin service (`getUserHealthMetrics()`) fetches health data from Firestore for any user
+   - **Files**: `lib/features/admin/screens/user_detail_screen.dart`, `lib/features/admin/services/admin_service.dart`
+
+**All requested updates have been completed!** ✅
+
+Need to be add: 
+- On the main page, please include a daily random AI recommendation for elders as a reminder. This recommendation should change every day.

@@ -15,6 +15,11 @@ import 'package:thriveapp/features/health/services/health_content_service.dart';
 import 'package:thriveapp/features/health/screens/health_monitoring_screen.dart';
 import 'package:thriveapp/features/health/services/health_monitoring_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:thriveapp/features/home/services/daily_recommendation_service.dart';
+import 'package:thriveapp/features/home/widgets/social_activity_reminder.dart';
+import 'package:thriveapp/features/home/widgets/caregiver_invitation_notification.dart';
+import 'package:thriveapp/features/activities/services/social_activity_service.dart';
+import 'package:flutter/foundation.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -273,6 +278,48 @@ class _HomeScreenState extends State<HomeScreen> {
                       ],
                     ),
                   ),
+                  const SizedBox(width: 12),
+                  // SOS Call Button
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.red.withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () {
+                          context.push('/emergency');
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.emergency, color: Colors.white, size: 20),
+                              SizedBox(width: 6),
+                              Text(
+                                'SOS',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               );
             },
@@ -280,32 +327,45 @@ class _HomeScreenState extends State<HomeScreen> {
           
           const SizedBox(height: 24),
           
-          // Health Stats Cards Row
+          // Daily AI Recommendation
+          _buildDailyRecommendation(),
+          
+          const SizedBox(height: 24),
+          
+          // Caregiver Invitation Notifications
+          const CaregiverInvitationNotification(),
+          
+          const SizedBox(height: 24),
+          
+          // Social Activity Reminder
+          _buildSocialActivityReminder(),
+          
+          // Reminder Cards Row
           FutureBuilder<Map<String, dynamic>>(
-            future: _getHealthStats(),
+            future: _getReminderStats(),
             builder: (context, snapshot) {
-              final heartRate = snapshot.data?['heartRate'] ?? '0';
-              final steps = snapshot.data?['steps'] ?? '0';
+              final medicationCount = snapshot.data?['medicationCount'] ?? 0;
+              final socialActivityCount = snapshot.data?['socialActivityCount'] ?? 0;
               
               return Row(
                 children: [
                   Expanded(
                     child: _buildStatCard(
-                      icon: Icons.favorite,
-                      color: const Color(0xFFFF6B6B),
-                      value: '$heartRate',
-                      label: 'Heart Rate',
-                      subtitle: 'BPM',
+                      icon: Icons.medication,
+                      color: const Color(0xFF00BCD4),
+                      value: '$medicationCount',
+                      label: 'Medication Reminder',
+                      subtitle: medicationCount == 1 ? 'Medication today' : 'Medications today',
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: _buildStatCard(
-                      icon: Icons.directions_walk,
+                      icon: Icons.event,
                       color: const Color(0xFF4E9FFF),
-                      value: '$steps',
-                      label: 'Steps',
-                      subtitle: 'Steps Taken',
+                      value: '$socialActivityCount',
+                      label: 'Social Activity Reminder',
+                      subtitle: socialActivityCount == 1 ? 'Upcoming activity' : 'Upcoming activities',
                     ),
                   ),
                 ],
@@ -338,13 +398,7 @@ class _HomeScreenState extends State<HomeScreen> {
           _buildMedicationReminder(),
           
           // Games and Progress
-          Row(
-            children: [
-              Expanded(child: _buildGamesCard()),
-              const SizedBox(width: 12),
-              Expanded(child: _buildEmergencyCard()),
-            ],
-          ),
+          _buildGamesCard(),
           
           const SizedBox(height: 20),
         ],
@@ -655,46 +709,98 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
   
-  Widget _buildEmergencyCard() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Theme.of(context).dividerColor),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Emergency Call',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
+
+  Widget _buildSocialActivityReminder() {
+    return const SocialActivityReminder();
+  }
+
+  Widget _buildDailyRecommendation() {
+    final recommendationService = DailyRecommendationService();
+    
+    return FutureBuilder<String>(
+      future: recommendationService.getTodaysRecommendation(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Theme.of(context).dividerColor),
+            ),
+            child: const Row(
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(width: 16),
+                Text('Loading daily recommendation...'),
+              ],
+            ),
+          );
+        }
+        
+        final recommendation = snapshot.data ?? 'Have a wonderful day filled with wellness and joy!';
+        
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                const Color(0xFF9B59B6).withOpacity(0.1),
+                const Color(0xFF00BCD4).withOpacity(0.1),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: const Color(0xFF9B59B6).withOpacity(0.3),
+              width: 1.5,
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            'Please press the "SOS Call" button to initiate an emergency call.',
-            style: TextStyle(
-              fontSize: 11,
-              color: Colors.grey[600],
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF9B59B6).withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.auto_awesome,
+                      color: Color(0xFF9B59B6),
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Daily Wellness Reminder',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF9B59B6),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                recommendation,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  height: 1.5,
+                  color: Colors.grey[800],
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
-          ElevatedButton(
-            onPressed: () {
-              context.push('/emergency');
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              minimumSize: const Size(double.infinity, 0),
-            ),
-            child: const Text('SOS CALL', style: TextStyle(fontSize: 12)),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -1086,18 +1192,39 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<Map<String, dynamic>> _getHealthStats() async {
+  Future<Map<String, dynamic>> _getReminderStats() async {
     try {
-      final healthService = HealthMonitoringService();
-      final metrics = await healthService.getHealthMetrics();
+      // Get medication count
+      int medicationCount = 0;
+      try {
+        final medicationsSnapshot = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(_auth.currentUser?.uid)
+            .collection('medications')
+            .where('isActive', isEqualTo: true)
+            .get();
+        medicationCount = medicationsSnapshot.docs.length;
+      } catch (e) {
+        debugPrint('Error fetching medications: $e');
+      }
+      
+      // Get upcoming social activities count
+      int socialActivityCount = 0;
+      try {
+        final socialActivityService = SocialActivityService();
+        final upcomingActivities = await socialActivityService.getUpcomingSocialActivities(days: 7);
+        socialActivityCount = upcomingActivities.length;
+      } catch (e) {
+        debugPrint('Error fetching social activities: $e');
+      }
       
       return {
-        'heartRate': metrics['heartRate']?.toStringAsFixed(0) ?? '0',
-        'steps': metrics['steps']?.toStringAsFixed(0) ?? '0',
+        'medicationCount': medicationCount,
+        'socialActivityCount': socialActivityCount,
       };
     } catch (e) {
-      print('Error fetching health stats: $e');
-      return {'heartRate': '0', 'steps': '0'};
+      debugPrint('Error fetching reminder stats: $e');
+      return {'medicationCount': 0, 'socialActivityCount': 0};
     }
   }
 

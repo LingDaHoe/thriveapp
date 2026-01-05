@@ -23,14 +23,38 @@ class AdminUser {
 
   factory AdminUser.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+    
+    // Handle nullable timestamps
+    DateTime createdAt;
+    if (data['createdAt'] != null) {
+      if (data['createdAt'] is Timestamp) {
+        createdAt = (data['createdAt'] as Timestamp).toDate();
+      } else {
+        createdAt = DateTime.now();
+      }
+    } else {
+      createdAt = DateTime.now();
+    }
+    
+    DateTime lastLogin;
+    if (data['lastLogin'] != null) {
+      if (data['lastLogin'] is Timestamp) {
+        lastLogin = (data['lastLogin'] as Timestamp).toDate();
+      } else {
+        lastLogin = DateTime.now();
+      }
+    } else {
+      lastLogin = DateTime.now();
+    }
+    
     return AdminUser(
       uid: doc.id,
       email: data['email'] ?? '',
       displayName: data['displayName'] ?? '',
       role: data['role'] ?? 'caretaker',
       assignedUsers: List<String>.from(data['assignedUsers'] ?? []),
-      createdAt: (data['createdAt'] as Timestamp).toDate(),
-      lastLogin: (data['lastLogin'] as Timestamp).toDate(),
+      createdAt: createdAt,
+      lastLogin: lastLogin,
       isActive: data['isActive'] ?? true,
     );
   }

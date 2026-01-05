@@ -28,43 +28,55 @@ class _HealthEducationScreenState extends State<HealthEducationScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Filter Content'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            DropdownButtonFormField<ContentType>(
-              value: _selectedType,
-              decoration: const InputDecoration(
-                labelText: 'Content Type',
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<ContentType>(
+                value: _selectedType,
+                decoration: const InputDecoration(
+                  labelText: 'Content Type',
+                ),
+                items: ContentType.values.map((type) {
+                  return DropdownMenuItem(
+                    value: type,
+                    child: Text(type.toString().split('.').last),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setState(() => _selectedType = value);
+                },
               ),
-              items: ContentType.values.map((type) {
-                return DropdownMenuItem(
-                  value: type,
-                  child: Text(type.toString().split('.').last),
-                );
-              }).toList(),
-              onChanged: (value) {
-                setState(() => _selectedType = value);
-                Navigator.pop(context);
-              },
-            ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<ContentCategory>(
-              value: _selectedCategory,
-              decoration: const InputDecoration(
-                labelText: 'Category',
+              const SizedBox(height: 16),
+              DropdownButtonFormField<ContentCategory>(
+                value: _selectedCategory,
+                decoration: const InputDecoration(
+                  labelText: 'Category',
+                ),
+                items: ContentCategory.values.map((category) {
+                  return DropdownMenuItem(
+                    value: category,
+                    child: Text(category.toString().split('.').last),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setState(() => _selectedCategory = value);
+                },
               ),
-              items: ContentCategory.values.map((category) {
-                return DropdownMenuItem(
-                  value: category,
-                  child: Text(category.toString().split('.').last),
-                );
-              }).toList(),
-              onChanged: (value) {
-                setState(() => _selectedCategory = value);
-                Navigator.pop(context);
-              },
-            ),
-          ],
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 8),
+              const Text(
+                'AI-Powered Filtering',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Use AI to find articles based on your preferences and interests.',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -79,7 +91,7 @@ class _HealthEducationScreenState extends State<HealthEducationScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+            child: const Text('Apply'),
           ),
         ],
       ),

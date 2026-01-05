@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../activity_bloc.dart';
 import '../models/activity.dart';
 import 'exercise_routine_screen.dart';
+import 'social_activities_screen.dart';
 
 class ActivitiesScreen extends StatelessWidget {
   const ActivitiesScreen({super.key});
@@ -277,7 +278,7 @@ class _ActivitiesScreenBodyState extends State<_ActivitiesScreenBody> with Singl
                 _buildActivitiesList(context, 'All'),
                 _buildActivitiesList(context, 'Physical'),
                 _buildActivitiesList(context, 'Mental'),
-                _buildActivitiesList(context, 'Social'),
+                const SocialActivitiesScreen(), // Use dedicated social activities screen
               ],
             ),
           ),

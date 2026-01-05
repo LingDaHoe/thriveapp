@@ -1,19 +1,174 @@
+import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../models/health_content.dart';
+import 'predefined_health_content.dart';
+import 'ai_health_content_service.dart';
 
 class HealthContentService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final AIHealthContentService _aiService = AIHealthContentService();
 
   Future<List<HealthContent>> getHealthContent({
     ContentType? type,
     ContentCategory? category,
     String? searchQuery,
+    Map<String, dynamic>? userPreferences, // AI-based filtering preferences
   }) async {
     try {
-      // Structured content for each category
+      // Get daily rotated predefined content
+      var content = _getDailyRotatedContent();
+
+      // Apply filters
+      if (type != null) {
+        content = content.where((c) => c.type == type).toList();
+      }
+
+      if (category != null) {
+        content = content.where((c) => c.category == category).toList();
+      }
+
+      // Handle search query or AI-based filtering
+      if (searchQuery != null && searchQuery.isNotEmpty) {
+        final queryLower = searchQuery.toLowerCase();
+        final predefinedMatches = content.where((c) {
+          return c.title.toLowerCase().contains(queryLower) ||
+              c.description.toLowerCase().contains(queryLower) ||
+              c.content.toLowerCase().contains(queryLower);
+        }).toList();
+
+        // If no matches in predefined content, use AI to generate relevant articles
+        if (predefinedMatches.isEmpty) {
+          try {
+            final aiContent = await _aiService.generateHealthContent(
+              type: type,
+              category: category,
+              searchQuery: searchQuery,
+              limit: 5,
+            );
+            
+            // Save AI-generated content to Firestore for points tracking
+            if (aiContent.isNotEmpty) {
+              await _saveAIContentToFirestore(aiContent);
+              return aiContent;
+            }
+          } catch (e) {
+            debugPrint('Error generating AI content for search: $e');
+            // Continue with predefined content even if AI fails
+          }
+        }
+        
+        return predefinedMatches;
+      }
+
+      // AI-based preference filtering (if user preferences provided)
+      if (userPreferences != null && userPreferences.isNotEmpty) {
+        try {
+          // Use AI to filter content based on user preferences
+          final preferenceQuery = _buildPreferenceQuery(userPreferences);
+          if (preferenceQuery.isNotEmpty) {
+            final aiFilteredContent = await _aiService.generateHealthContent(
+              type: type,
+              category: category,
+              searchQuery: preferenceQuery,
+              limit: 10,
+            );
+            
+            if (aiFilteredContent.isNotEmpty) {
+              await _saveAIContentToFirestore(aiFilteredContent);
+              // Combine with predefined content
+              content = [...content, ...aiFilteredContent];
+            }
+          }
+        } catch (e) {
+          debugPrint('Error with AI preference filtering: $e');
+        }
+      }
+
+      return content;
+    } catch (e) {
+      debugPrint('Error getting health content: $e');
+      // Return fallback content on error
+      return PredefinedHealthContent.getPredefinedContent().take(5).toList();
+    }
+  }
+
+  /// Build a search query from user preferences for AI filtering
+  String _buildPreferenceQuery(Map<String, dynamic> preferences) {
+    final queryParts = <String>[];
+    
+    if (preferences['interests'] != null) {
+      final interests = preferences['interests'] as List<dynamic>?;
+      if (interests != null && interests.isNotEmpty) {
+        queryParts.add(interests.join(', '));
+      }
+    }
+    
+    if (preferences['healthConditions'] != null) {
+      final conditions = preferences['healthConditions'] as List<dynamic>?;
+      if (conditions != null && conditions.isNotEmpty) {
+        queryParts.add('health conditions: ${conditions.join(', ')}');
+      }
+    }
+    
+    if (preferences['goals'] != null) {
+      final goals = preferences['goals'] as List<dynamic>?;
+      if (goals != null && goals.isNotEmpty) {
+        queryParts.add('goals: ${goals.join(', ')}');
+      }
+    }
+    
+    return queryParts.join('. ');
+  }
+
+  /// Get daily rotated content using date-based seed
+  List<HealthContent> _getDailyRotatedContent() {
+    final allContent = PredefinedHealthContent.getPredefinedContent();
+    
+    // Use today's date as seed for consistent daily rotation
+    final today = DateTime.now();
+    final dateSeed = today.year * 10000 + today.month * 100 + today.day;
+    final random = Random(dateSeed);
+    
+    // Shuffle content based on date seed
+    final shuffled = List<HealthContent>.from(allContent);
+    for (int i = shuffled.length - 1; i > 0; i--) {
+      final j = random.nextInt(i + 1);
+      final temp = shuffled[i];
+      shuffled[i] = shuffled[j];
+      shuffled[j] = temp;
+    }
+    
+    // Return all content (shuffled differently each day)
+    // This ensures variety while keeping all content available
+    return shuffled;
+  }
+
+  /// Save AI-generated content to Firestore for points tracking
+  Future<void> _saveAIContentToFirestore(List<HealthContent> content) async {
+    try {
+      final batch = _firestore.batch();
+      for (final item in content) {
+        final docRef = _firestore.collection('healthContent').doc(item.id);
+        batch.set(docRef, item.toJson(), SetOptions(merge: true));
+      }
+      await batch.commit();
+    } catch (e) {
+      debugPrint('Error saving AI content to Firestore: $e');
+      // Don't throw - points tracking will still work via content ID
+    }
+  }
+  
+  // Old hardcoded content method - kept for reference but not used
+  /*
+  Future<List<HealthContent>> _getHardcodedContent({
+    ContentType? type,
+    ContentCategory? category,
+    String? searchQuery,
+  }) async {
+    try {
       final content = [
         // Cardiovascular Health
         HealthContent(
@@ -342,49 +497,56 @@ Remember, prevention is better than cure.
           createdAt: DateTime.now(),
         ),
       ];
-
-      // Filter content based on parameters
-      var filteredContent = content;
-      if (type != null) {
-        filteredContent = filteredContent.where((c) => c.type == type).toList();
-      }
-      if (category != null) {
-        filteredContent = filteredContent.where((c) => c.category == category).toList();
-      }
-      if (searchQuery != null && searchQuery.isNotEmpty) {
-        filteredContent = filteredContent
-            .where((c) =>
-                c.title.toLowerCase().contains(searchQuery.toLowerCase()) ||
-                c.description.toLowerCase().contains(searchQuery.toLowerCase()))
-            .toList();
-      }
-
-      return filteredContent;
+      
+      // Filter logic would go here...
+      return content;
     } catch (e) {
-      debugPrint('Error getting health content: $e');
-      throw Exception('Failed to load health content');
+      debugPrint('Error getting hardcoded content: $e');
+      return [];
     }
   }
+  */
 
   Future<HealthContent> getHealthContentById(String id) async {
     try {
-      // First try to get from Firestore
+      // First try to get from Firestore (AI-generated or saved content)
       try {
         final doc = await _firestore.collection('healthContent').doc(id).get();
         if (doc.exists) {
-          return HealthContent.fromJson(doc.data()!);
+          final data = doc.data()!;
+          // Convert Firestore data to HealthContent
+          return HealthContent(
+            id: data['id'] as String,
+            title: data['title'] as String,
+            description: data['description'] as String,
+            type: ContentType.values.firstWhere(
+              (e) => e.toString().split('.').last == data['type'],
+              orElse: () => ContentType.article,
+            ),
+            category: ContentCategory.values.firstWhere(
+              (e) => e.toString().split('.').last == data['category'],
+              orElse: () => ContentCategory.general,
+            ),
+            content: data['content'] as String,
+            mediaUrl: data['mediaUrl'] as String?,
+            duration: data['duration'] as int?,
+            createdAt: (data['createdAt'] as Timestamp).toDate(),
+          );
         }
       } catch (e) {
         debugPrint('Error fetching from Firestore: $e');
       }
 
-      // If not found in Firestore, get from local content
-      final allContent = await getHealthContent();
-      final content = allContent.firstWhere(
-        (c) => c.id == id,
-        orElse: () => throw Exception('Health content not found'),
-      );
-      return content;
+      // Get from predefined content
+      final allContent = PredefinedHealthContent.getPredefinedContent();
+      try {
+        final content = allContent.firstWhere(
+          (c) => c.id == id,
+        );
+        return content;
+      } catch (e) {
+        throw Exception('Health content not found: $id');
+      }
     } catch (e) {
       debugPrint('Error getting health content by id: $e');
       rethrow;
@@ -483,32 +645,46 @@ Remember, prevention is better than cure.
         });
 
         // Get content details for the activity log
+        // Try Firestore first (for AI-generated content)
         final contentDoc = await _firestore
             .collection('healthContent')
             .doc(contentId)
             .get();
         
+        String contentTitle;
+        
         if (contentDoc.exists) {
+          // AI-generated content from Firestore
           final contentData = contentDoc.data()!;
-          final now = DateTime.now();
-          
-          // Log as a completed activity for "Recent Activities"
-          await _firestore
-              .collection('activityProgress')
-              .doc(userId)
-              .collection('activities')
-              .add({
-            'userId': userId,
-            'activityId': contentId,
-            'title': contentData['title'],
-            'type': 'reading',  // or contentData['type']
-            'status': 'completed',
-            'pointsEarned': 5,
-            'completedAt': FieldValue.serverTimestamp(),
-            'startedAt': Timestamp.fromDate(now.subtract(const Duration(minutes: 5))),
-            'healthData': {},
-          });
+          contentTitle = contentData['title'] as String? ?? 'Health Article';
+        } else {
+          // Predefined content - get from predefined library
+          try {
+            final predefinedContent = await getHealthContentById(contentId);
+            contentTitle = predefinedContent.title;
+          } catch (e) {
+            debugPrint('Error getting content title: $e');
+            contentTitle = 'Health Article';
+          }
         }
+        
+        // Log as a completed activity for "Recent Activities"
+        final now = DateTime.now();
+        await _firestore
+            .collection('activityProgress')
+            .doc(userId)
+            .collection('activities')
+            .add({
+          'userId': userId,
+          'activityId': contentId,
+          'title': contentTitle,
+          'type': 'reading',
+          'status': 'completed',
+          'pointsEarned': 5,
+          'completedAt': FieldValue.serverTimestamp(),
+          'startedAt': Timestamp.fromDate(now.subtract(const Duration(minutes: 5))),
+          'healthData': {},
+        });
       }
     } catch (e) {
       debugPrint('Error tracking content progress: $e');
@@ -550,13 +726,18 @@ Remember, prevention is better than cure.
           .collection('contentProgress')
           .get();
 
-      // Calculate total time spent
+      // Calculate total time spent (skip content that doesn't exist)
       int totalTime = 0;
       for (var doc in viewedContent.docs) {
-        final content = await getHealthContentById(doc.id);
-        final viewCount = doc.data()['viewCount'] as int? ?? 0;
-        if (content.duration != null) {
-          totalTime += content.duration! * viewCount;
+        try {
+          final content = await getHealthContentById(doc.id);
+          final viewCount = doc.data()['viewCount'] as int? ?? 0;
+          if (content.duration != null) {
+            totalTime += content.duration! * viewCount;
+          }
+        } catch (e) {
+          // Skip content that doesn't exist (old IDs)
+          debugPrint('Skipping missing content ID in stats: ${doc.id}');
         }
       }
 
@@ -586,14 +767,19 @@ Remember, prevention is better than cure.
 
       final List<Map<String, dynamic>> recentlyViewed = [];
       for (var doc in progress.docs) {
-        final content = await getHealthContentById(doc.id);
-        recentlyViewed.add({
-          'id': content.id,
-          'title': content.title,
-          'type': content.type,
-          'lastViewed': doc.data()['lastViewed'],
-          'viewCount': doc.data()['viewCount'] ?? 0,
-        });
+        try {
+          final content = await getHealthContentById(doc.id);
+          recentlyViewed.add({
+            'id': content.id,
+            'title': content.title,
+            'type': content.type,
+            'lastViewed': doc.data()['lastViewed'],
+            'viewCount': doc.data()['viewCount'] ?? 0,
+          });
+        } catch (e) {
+          // Skip content that doesn't exist (old IDs)
+          debugPrint('Skipping missing content ID in recently viewed: ${doc.id}');
+        }
       }
 
       return recentlyViewed;
@@ -615,23 +801,44 @@ Remember, prevention is better than cure.
           .collection('contentProgress')
           .get();
 
-      // Get all content to calculate category totals
-      final allContent = await _firestore.collection('healthContent').get();
+      // Get all content to calculate category totals from predefined content
+      final allContent = PredefinedHealthContent.getPredefinedContent();
+      
+      // Also get AI-generated content from Firestore
+      final firestoreContent = await _firestore.collection('healthContent').get();
 
       // Calculate progress for each category
       final Map<String, int> categoryViewed = {};
       final Map<String, int> categoryTotal = {};
 
-      for (var doc in allContent.docs) {
-        final content = HealthContent.fromJson(doc.data());
+      // Count total content by category (predefined + Firestore)
+      for (var content in allContent) {
         final category = content.category.toString();
         categoryTotal[category] = (categoryTotal[category] ?? 0) + 1;
       }
+      
+      for (var doc in firestoreContent.docs) {
+        try {
+          final data = doc.data();
+          final category = data['category'] as String?;
+          if (category != null) {
+            categoryTotal[category] = (categoryTotal[category] ?? 0) + 1;
+          }
+        } catch (e) {
+          // Skip invalid documents
+        }
+      }
 
+      // Count viewed content by category (skip if content doesn't exist)
       for (var doc in progress.docs) {
-        final content = await getHealthContentById(doc.id);
-        final category = content.category.toString();
-        categoryViewed[category] = (categoryViewed[category] ?? 0) + 1;
+        try {
+          final content = await getHealthContentById(doc.id);
+          final category = content.category.toString();
+          categoryViewed[category] = (categoryViewed[category] ?? 0) + 1;
+        } catch (e) {
+          // Skip content that doesn't exist (old IDs like gen_1)
+          debugPrint('Skipping missing content ID: ${doc.id}');
+        }
       }
 
       // Calculate progress percentages

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/admin_service.dart';
 
 class AdminLoginScreen extends StatefulWidget {
@@ -56,9 +57,30 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
         ),
       );
 
-      // Navigate to admin dashboard using pushReplacement to avoid back navigation
+      // CRITICAL: Wait for SharedPreferences to be set and force router refresh
+      await Future.delayed(const Duration(milliseconds: 300));
+      
+      // Force router to refresh by using pushReplacement and then go
       if (mounted) {
-        context.pushReplacement('/admin/dashboard');
+        // First ensure SharedPreferences is committed
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('isAdmin', true);
+        await prefs.setString('userRole', adminUser.role);
+        
+        // Wait a bit more for router to pick up changes
+        await Future.delayed(const Duration(milliseconds: 100));
+        
+        // Navigate to appropriate dashboard based on role
+        if (adminUser.isAdmin) {
+          debugPrint('Redirecting admin to /admin/dashboard');
+          context.go('/admin/dashboard');
+        } else if (adminUser.isCaretaker) {
+          debugPrint('Redirecting caregiver to /caregiver/dashboard');
+          context.go('/caregiver/dashboard');
+        } else {
+          debugPrint('Fallback: Redirecting to /admin/dashboard');
+          context.go('/admin/dashboard');
+        }
       }
     } catch (e) {
       if (!mounted) return;
@@ -104,11 +126,28 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Login to access administrative features',
+                  'Login as Admin or Caregiver',
                   style: Theme.of(context).textTheme.bodyMedium,
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 48),
+                const SizedBox(height: 32),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          // Navigate to caregiver registration page
+                          context.push('/caregiver/register');
+                        },
+                        icon: const Icon(Icons.person_add),
+                        label: const Text('Register as Caregiver'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                const Divider(),
+                const SizedBox(height: 24),
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,

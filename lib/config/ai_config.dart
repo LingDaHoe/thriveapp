@@ -1,17 +1,20 @@
 import 'package:flutter/foundation.dart';
 
 class AIConfig {
-  // Using Google Gemini API (Free tier available)
-  // Get your free API key from: https://makersuite.google.com/app/apikey
-  static const String apiKey = 'AIzaSyBIawQwJCKQhW47htS8FPdkIQ18DE-xOe8';
+  // Using OpenRouter API with Xiaomi MiMo-V2-Flash (free model)
+  // Get your API key from: https://openrouter.ai/keys
+  // Add your API key here:
+  static const String apiKey = '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';
 
-  static const String apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
+  static const String apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
+  static const String model = 'xiaomi/mimo-v2-flash:free';
 
   static bool get isConfigured {
-    final hasKey = apiKey.isNotEmpty && apiKey != 'YOUR_GEMINI_API_KEY_HERE';
+    final hasKey = apiKey.isNotEmpty && apiKey != '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';
     if (!hasKey && kDebugMode) {
-      print('Warning: Gemini API key is not configured.');
-      print('Get your free API key from: https://makersuite.google.com/app/apikey');
+      print('Warning: OpenRouter API key is not configured.');
+      print('Get your API key from: https://openrouter.ai/keys');
+      print('Model: xiaomi/mimo-v2-flash (free)');
     }
     return hasKey;
   }

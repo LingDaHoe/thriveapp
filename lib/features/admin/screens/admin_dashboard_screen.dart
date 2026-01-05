@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter/foundation.dart';
 import '../services/admin_service.dart';
 import '../models/admin_user.dart';
 
@@ -18,11 +19,26 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   List<Map<String, dynamic>> _allUsers = [];
   List<Map<String, dynamic>> _recentSOSEvents = [];
   bool _isLoading = true;
+  bool _usersSectionExpanded = false; // Auto-minimize
+  bool _sosSectionExpanded = false; // Auto-minimize
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _searchController.addListener(() {
+      setState(() {
+        _searchQuery = _searchController.text.toLowerCase();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -40,6 +56,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final users = await _adminService.getAllUsers();
     // Get all SOS events from all users
     final sosEvents = await _adminService.getAllSOSEventsFromAllUsers();
+    // Get pending caregivers (refresh this list)
+    final pendingCaregivers = await _adminService.getPendingCaregivers();
+
+    debugPrint('Loaded ${pendingCaregivers.length} pending caregivers');
 
     if (mounted) {
       setState(() {
@@ -85,6 +105,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     _buildAdminInfo(),
                     const SizedBox(height: 24),
                     _buildStatsCards(),
+                    const SizedBox(height: 24),
+                    _buildCaregiverManagementSection(),
                     const SizedBox(height: 24),
                     _buildRecentSOSSection(),
                     const SizedBox(height: 24),
@@ -184,6 +206,211 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Widget _buildRecentSOSSection() {
+    return Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () {
+              setState(() {
+                _sosSectionExpanded = !_sosSectionExpanded;
+              });
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Recent SOS Alerts',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  Row(
+                    children: [
+                      if (_recentSOSEvents.isNotEmpty)
+                        TextButton(
+                          onPressed: () {
+                            // Navigate to full SOS history
+                          },
+                          child: const Text('View All'),
+                        ),
+                      Icon(
+                        _sosSectionExpanded
+                            ? Icons.expand_less
+                            : Icons.expand_more,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_sosSectionExpanded) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: _recentSOSEvents.isEmpty
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Text(
+                          'No SOS events',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _recentSOSEvents.take(5).length,
+                      itemBuilder: (context, index) {
+                        final event = _recentSOSEvents[index];
+                        final userName = event['userName'] ?? 'Unknown User';
+                        final timestamp = event['timestamp'] as Timestamp?;
+                        final timeAgo = timestamp != null 
+                            ? _getTimeAgo(timestamp.toDate())
+                            : 'Unknown time';
+                        
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          child: ListTile(
+                            leading: const Icon(Icons.warning, color: Colors.red),
+                            title: Text('${event['type'] ?? 'SOS'} - $userName'),
+                            subtitle: Text('${event['description'] ?? 'Emergency triggered'}\n$timeAgo'),
+                            isThreeLine: true,
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () {
+                              // Navigate to user detail page, specifically to SOS tab
+                              if (event['userId'] != null) {
+                                context.push('/admin/user/${event['userId']}?tab=sos');
+                              }
+                            },
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAllUsersSection() {
+    // Filter users based on search query
+    final filteredUsers = _allUsers.where((user) {
+      if (_searchQuery.isEmpty) return true;
+      final name = (user['displayName'] ?? '').toString().toLowerCase();
+      final email = (user['email'] ?? '').toString().toLowerCase();
+      return name.contains(_searchQuery) || email.contains(_searchQuery);
+    }).toList();
+
+    return Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: () {
+              setState(() {
+                _usersSectionExpanded = !_usersSectionExpanded;
+              });
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'All Users (${_allUsers.length})',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  Icon(
+                    _usersSectionExpanded
+                        ? Icons.expand_less
+                        : Icons.expand_more,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_usersSectionExpanded) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  // Search bar
+                  TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: 'Search users by name or email...',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () {
+                                _searchController.clear();
+                              },
+                            )
+                          : null,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      filled: true,
+                      fillColor: Colors.grey.shade100,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (filteredUsers.isEmpty)
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Text(
+                          _searchQuery.isNotEmpty
+                              ? 'No users found matching "$_searchQuery"'
+                              : 'No users found',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ),
+                    )
+                  else
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: filteredUsers.length,
+                      itemBuilder: (context, index) {
+                        final user = filteredUsers[index];
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          child: ListTile(
+                            leading: CircleAvatar(
+                              backgroundColor: Theme.of(context).colorScheme.primary,
+                              child: Text(
+                                (user['displayName'] ?? 'U')[0].toUpperCase(),
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                            ),
+                            title: Text(user['displayName'] ?? 'Unknown'),
+                            subtitle: Text(user['email'] ?? ''),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () {
+                              // Navigate to user detail page where admin can view health, add medications, etc.
+                              context.push('/admin/user/${user['uid']}');
+                            },
+                          ),
+                        );
+                      },
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCaregiverManagementSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -191,113 +418,242 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              'Recent SOS Alerts',
+              'Caregiver Management',
               style: Theme.of(context).textTheme.titleLarge,
             ),
-            if (_recentSOSEvents.isNotEmpty)
-              TextButton(
-                onPressed: () {
-                  // Navigate to full SOS history
-                },
-                child: const Text('View All'),
-              ),
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: () {
+                _loadData(); // Refresh all data including pending caregivers
+              },
+              tooltip: 'Refresh',
+            ),
           ],
         ),
         const SizedBox(height: 8),
-        if (_recentSOSEvents.isEmpty)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Center(
-                child: Text(
-                  'No SOS events',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ),
-            ),
-          )
-        else
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _recentSOSEvents.take(5).length,
-            itemBuilder: (context, index) {
-              final event = _recentSOSEvents[index];
-              final userName = event['userName'] ?? 'Unknown User';
-              final timestamp = event['timestamp'] as Timestamp?;
-              final timeAgo = timestamp != null 
-                  ? _getTimeAgo(timestamp.toDate())
-                  : 'Unknown time';
-              
-              return Card(
-                child: ListTile(
-                  leading: const Icon(Icons.warning, color: Colors.red),
-                  title: Text('${event['type'] ?? 'SOS'} - $userName'),
-                  subtitle: Text('${event['description'] ?? 'Emergency triggered'}\n$timeAgo'),
-                  isThreeLine: true,
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    // Navigate to user detail page
-                    if (event['userId'] != null) {
-                      context.push('/admin/user/${event['userId']}');
-                    }
-                  },
+        FutureBuilder<List<Map<String, dynamic>>>(
+          future: _adminService.getPendingCaregivers(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Center(child: CircularProgressIndicator()),
                 ),
               );
-            },
-          ),
-      ],
-    );
-  }
+            }
 
-  Widget _buildAllUsersSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'All Users',
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-        const SizedBox(height: 8),
-        if (_allUsers.isEmpty)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Center(
-                child: Text(
-                  'No users found',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ),
-            ),
-          )
-        else
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _allUsers.length,
-            itemBuilder: (context, index) {
-              final user = _allUsers[index];
+            final pendingCaregivers = snapshot.data ?? [];
+
+            if (pendingCaregivers.isEmpty) {
               return Card(
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: Theme.of(context).colorScheme.primary,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    'No pending caregiver registrations',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+              );
+            }
+
+            return Column(
+              children: [
+                if (pendingCaregivers.length > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
                     child: Text(
-                      (user['displayName'] ?? 'U')[0].toUpperCase(),
-                      style: const TextStyle(color: Colors.white),
+                      '${pendingCaregivers.length} pending registration(s)',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.orange.shade700,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
-                  title: Text(user['displayName'] ?? 'Unknown'),
-                  subtitle: Text(user['email'] ?? ''),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () {
-                    // Navigate to user detail page where admin can view health, add medications, etc.
-                    context.push('/admin/user/${user['uid']}');
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: pendingCaregivers.length,
+                  itemBuilder: (context, index) {
+                    final caregiver = pendingCaregivers[index];
+                    final createdAt = caregiver['createdAt'];
+                    String timeInfo = '';
+                    if (createdAt != null) {
+                      if (createdAt is Timestamp) {
+                        final date = createdAt.toDate();
+                        timeInfo = 'Registered: ${_formatDate(date)}';
+                      }
+                    }
+                    
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        leading: const Icon(Icons.person_add, color: Colors.orange, size: 32),
+                        title: Text(
+                          caregiver['displayName'] ?? 'Unknown',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(caregiver['email'] ?? ''),
+                            if (caregiver['phoneNumber'] != null && caregiver['phoneNumber'].toString().isNotEmpty)
+                              Text('Phone: ${caregiver['phoneNumber']}'),
+                            if (caregiver['organization'] != null && caregiver['organization'].toString().isNotEmpty)
+                              Text('Organization: ${caregiver['organization']}'),
+                            if (timeInfo.isNotEmpty)
+                              Text(
+                                timeInfo,
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Colors.grey,
+                                ),
+                              ),
+                          ],
+                        ),
+                        isThreeLine: true,
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.check_circle, color: Colors.green),
+                              tooltip: 'Approve',
+                              onPressed: () async {
+                                final confirm = await showDialog<bool>(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: const Text('Approve Caregiver?'),
+                                    content: Text(
+                                      'Approve ${caregiver['displayName']} (${caregiver['email']}) as a caregiver?\n\nThey will be able to access the caregiver dashboard and manage assigned users.',
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(context, false),
+                                        child: const Text('Cancel'),
+                                      ),
+                                      ElevatedButton(
+                                        onPressed: () => Navigator.pop(context, true),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.green,
+                                        ),
+                                        child: const Text('Approve'),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                
+                                if (confirm == true) {
+                                  try {
+                                    await _adminService.approveCaregiver(caregiver['id']);
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            '✅ ${caregiver['displayName']} approved as caregiver!',
+                                          ),
+                                          backgroundColor: Colors.green,
+                                          duration: const Duration(seconds: 3),
+                                        ),
+                                      );
+                                      _loadData(); // Refresh the list
+                                    }
+                                  } catch (e) {
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Error approving caregiver: $e'),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                }
+                              },
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.cancel, color: Colors.red),
+                              tooltip: 'Reject',
+                              onPressed: () async {
+                                final reason = await showDialog<String>(
+                                  context: context,
+                                  builder: (context) {
+                                    final controller = TextEditingController();
+                                    return AlertDialog(
+                                      title: const Text('Reject Caregiver Registration'),
+                                      content: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            'Reject ${caregiver['displayName']} (${caregiver['email']})?',
+                                          ),
+                                          const SizedBox(height: 16),
+                                          TextField(
+                                            controller: controller,
+                                            decoration: const InputDecoration(
+                                              labelText: 'Reason (optional)',
+                                              hintText: 'Enter rejection reason...',
+                                            ),
+                                            maxLines: 3,
+                                          ),
+                                        ],
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(context),
+                                          child: const Text('Cancel'),
+                                        ),
+                                        ElevatedButton(
+                                          onPressed: () =>
+                                              Navigator.pop(context, controller.text),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.red,
+                                          ),
+                                          child: const Text('Reject'),
+                                        ),
+                                      ],
+                                    );
+                                  },
+                                );
+
+                                if (reason != null) {
+                                  try {
+                                    await _adminService.rejectCaregiver(
+                                      caregiver['id'],
+                                      reason.isEmpty ? 'No reason provided' : reason,
+                                    );
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            '❌ ${caregiver['displayName']} registration rejected',
+                                          ),
+                                          backgroundColor: Colors.orange,
+                                        ),
+                                      );
+                                      _loadData();
+                                    }
+                                  } catch (e) {
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Error rejecting caregiver: $e'),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                    }
+                                  }
+                                }
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
                   },
                 ),
-              );
-            },
-          ),
+              ],
+            );
+          },
+        ),
       ],
     );
   }
@@ -324,6 +680,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       final years = (difference.inDays / 365).floor();
       return '$years ${years == 1 ? 'year' : 'years'} ago';
     }
+  }
+
+  String _formatDate(DateTime dateTime) {
+    return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
   }
 }
 

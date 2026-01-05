@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class Medication {
   final String id;
   final String name;
@@ -47,19 +45,60 @@ class Medication {
   }
 
   factory Medication.fromJson(Map<String, dynamic> json) {
+    // Handle nullable or missing fields gracefully
+    final timesData = json['times'];
+    final times = timesData != null
+        ? (timesData is List
+            ? List<String>.from(timesData)
+            : [timesData.toString()])
+        : ['09:00']; // Default to morning if missing
+    
+    final startDateStr = json['startDate'];
+    final startDate = startDateStr != null
+        ? (startDateStr is String
+            ? DateTime.parse(startDateStr)
+            : (startDateStr is DateTime
+                ? startDateStr
+                : DateTime.now()))
+        : DateTime.now();
+    
+    final createdAtStr = json['createdAt'];
+    final createdAt = createdAtStr != null
+        ? (createdAtStr is String
+            ? DateTime.parse(createdAtStr)
+            : (createdAtStr is DateTime
+                ? createdAtStr
+                : DateTime.now()))
+        : DateTime.now();
+    
+    final updatedAtStr = json['updatedAt'];
+    final updatedAt = updatedAtStr != null
+        ? (updatedAtStr is String
+            ? DateTime.parse(updatedAtStr)
+            : (updatedAtStr is DateTime
+                ? updatedAtStr
+                : DateTime.now()))
+        : DateTime.now();
+    
     return Medication(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      dosage: json['dosage'] as String,
-      frequency: json['frequency'] as String,
-      times: List<String>.from(json['times'] as List),
-      startDate: DateTime.parse(json['startDate'] as String),
-      endDate: json['endDate'] != null ? DateTime.parse(json['endDate'] as String) : null,
-      instructions: json['instructions'] as String,
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      dosage: json['dosage']?.toString() ?? '',
+      frequency: json['frequency']?.toString() ?? 'Once daily',
+      times: times,
+      startDate: startDate,
+      endDate: json['endDate'] != null
+          ? (json['endDate'] is String
+              ? DateTime.parse(json['endDate'] as String)
+              : (json['endDate'] is DateTime
+                  ? json['endDate'] as DateTime
+                  : null))
+          : null,
+      instructions: json['instructions']?.toString() ?? 'Take as prescribed',
       isActive: json['isActive'] as bool? ?? true,
-      notes: json['notes'] as String?,
-      createdAt: DateTime.parse(json['createdAt'] as String),
-      updatedAt: DateTime.parse(json['updatedAt'] as String),
+      notes: json['notes']?.toString(),
+      createdAt: createdAt,
+      updatedAt: updatedAt,
     );
   }
 

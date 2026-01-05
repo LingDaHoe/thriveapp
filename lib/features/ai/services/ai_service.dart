@@ -1,6 +1,7 @@
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:thriveapp/config/ai_config.dart';
 
 class AIService {
   final String _apiKey;
@@ -18,32 +19,50 @@ class AIService {
   Future<String> getResponse(String userMessage) async {
     try {
       if (kDebugMode) {
-        print('=== Gemini API Request ===');
+        print('=== OpenRouter API Request ===');
         print('User message: $userMessage');
       }
 
-      // Add user message to history
-      _conversationHistory.add({
+      // Convert conversation history to OpenRouter format
+      final messages = <Map<String, String>>[];
+      
+      // Add system message
+      messages.add({
+        'role': 'system',
+        'content': 'You are a helpful health and wellness assistant. Provide clear, concise, and supportive advice. Keep responses under 200 words.'
+      });
+      
+      // Convert conversation history from Gemini format to OpenRouter format
+      for (var msg in _conversationHistory) {
+        final role = msg['role'] as String;
+        if (role == 'user' || role == 'assistant') {
+          final parts = msg['parts'] as List<dynamic>?;
+          if (parts != null && parts.isNotEmpty) {
+            final text = parts[0]['text'] as String?;
+            if (text != null) {
+              messages.add({
+                'role': role == 'user' ? 'user' : 'assistant',
+                'content': text,
+              });
+            }
+          }
+        }
+      }
+      
+      // Add current user message
+      messages.add({
         'role': 'user',
-        'parts': [{'text': userMessage}]
+        'content': userMessage,
       });
 
-      // Prepare the API request
-      final url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=$_apiKey';
+      // Prepare the API request for OpenRouter
+      final url = AIConfig.apiUrl;
       
       final requestBody = {
-        'contents': _conversationHistory,
-        'systemInstruction': {
-          'parts': [
-            {
-              'text': 'You are a helpful health and wellness assistant. Provide clear, concise, and supportive advice. Keep responses under 200 words.'
-            }
-          ]
-        },
-        'generationConfig': {
-          'temperature': 0.7,
-          'maxOutputTokens': 1000,
-        }
+        'model': AIConfig.model,
+        'messages': messages,
+        'temperature': 0.7,
+        'max_tokens': 1000,
       };
 
       if (kDebugMode) {
@@ -54,7 +73,10 @@ class AIService {
       // Make the API call
       final response = await http.post(
         Uri.parse(url),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $_apiKey',
+        },
         body: jsonEncode(requestBody),
       );
 
@@ -67,21 +89,19 @@ class AIService {
       if (response.statusCode == 200) {
         final jsonResponse = jsonDecode(response.body);
         
-        if (jsonResponse['candidates'] != null && 
-            jsonResponse['candidates'].isNotEmpty) {
+        if (jsonResponse['choices'] != null && 
+            jsonResponse['choices'].isNotEmpty) {
           
-          final candidate = jsonResponse['candidates'][0];
-          final content = candidate['content'];
+          final choice = jsonResponse['choices'][0];
+          final message = choice['message'];
           
-          // Check if parts exist and have text
-          if (content != null && content['parts'] != null && content['parts'].isNotEmpty) {
-            final parts = content['parts'];
-            final text = parts[0]['text'];
+          if (message != null && message['content'] != null) {
+            final text = message['content'] as String;
             
-            if (text != null && text.isNotEmpty) {
-              // Add assistant response to history
+            if (text.isNotEmpty) {
+              // Add assistant response to history (in Gemini format for compatibility)
               _conversationHistory.add({
-                'role': 'model',
+                'role': 'assistant',
                 'parts': [{'text': text}]
               });
               
@@ -89,17 +109,14 @@ class AIService {
             }
           }
           
-          // If we get here, the response was empty or incomplete
-          if (kDebugMode) {
-            print('Empty response or missing parts. Full candidate: $candidate');
-          }
           throw Exception('AI returned an empty response. Please try rephrasing your question.');
         } else {
-          throw Exception('No response from Gemini');
+          throw Exception('No response from AI');
         }
       } else {
         final errorBody = jsonDecode(response.body);
-        throw Exception('API Error: ${errorBody['error']['message']}');
+        final error = errorBody['error'];
+        throw Exception('API Error: ${error is Map ? error['message'] ?? 'Unknown error' : 'Unknown error'}');
       }
     } catch (e) {
       if (kDebugMode) {
