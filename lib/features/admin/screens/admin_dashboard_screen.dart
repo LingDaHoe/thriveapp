@@ -23,16 +23,105 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   bool _sosSectionExpanded = false; // Auto-minimize
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  Map<String, dynamic>? _latestSOSEvent; // Track latest SOS for notification
+  DateTime? _lastSOSCheckTime; // Track when we last checked for SOS
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _setupSOSListener();
     _searchController.addListener(() {
       setState(() {
         _searchQuery = _searchController.text.toLowerCase();
       });
     });
+  }
+
+  void _setupSOSListener() {
+    // Listen to real-time SOS events
+    _adminService.watchAllSOSEvents().listen((events) {
+      if (mounted && events.isNotEmpty) {
+        final latestEvent = events.first;
+        final eventTime = latestEvent['timestamp'] as Timestamp?;
+        
+        // Only show notification if this is a new event (after last check)
+        if (eventTime != null) {
+          final eventDateTime = eventTime.toDate();
+          if (_lastSOSCheckTime == null || eventDateTime.isAfter(_lastSOSCheckTime!)) {
+            setState(() {
+              _latestSOSEvent = latestEvent;
+              _recentSOSEvents = events;
+            });
+            
+            // Show notification banner
+            _showSOSNotification(latestEvent);
+            
+            // Update last check time
+            _lastSOSCheckTime = DateTime.now();
+          } else {
+            // Just update the list without showing notification
+            setState(() {
+              _recentSOSEvents = events;
+            });
+          }
+        }
+      }
+    });
+  }
+
+  void _showSOSNotification(Map<String, dynamic> event) {
+    final userName = event['userName'] ?? 'Unknown User';
+    final location = event['location'] as Map<String, dynamic>?;
+    final latitude = location?['latitude'];
+    final longitude = location?['longitude'];
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.warning, color: Colors.white),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '🚨 SOS ALERT: $userName',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text('Emergency triggered - Immediate action required!'),
+            if (latitude != null && longitude != null)
+              TextButton(
+                onPressed: () {
+                  // Open maps - URL can be used with url_launcher if needed
+                  // final url = 'https://maps.google.com/?q=$latitude,$longitude';
+                },
+                child: const Text('View Location', style: TextStyle(color: Colors.white)),
+              ),
+          ],
+        ),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 10),
+        action: SnackBarAction(
+          label: 'View Details',
+          textColor: Colors.white,
+          onPressed: () {
+            if (event['userId'] != null) {
+              context.push('/admin/user/${event['userId']}?tab=sos');
+            }
+          },
+        ),
+      ),
+    );
   }
 
   @override
@@ -102,6 +191,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Show SOS notification banner if there's a recent event
+                    if (_latestSOSEvent != null) _buildSOSBanner(),
                     _buildAdminInfo(),
                     const SizedBox(height: 24),
                     _buildStatsCards(),
@@ -115,6 +206,71 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ),
               ),
             ),
+    );
+  }
+
+  Widget _buildSOSBanner() {
+    if (_latestSOSEvent == null) return const SizedBox.shrink();
+    
+    final userName = _latestSOSEvent!['userName'] ?? 'Unknown User';
+    final location = _latestSOSEvent!['location'] as Map<String, dynamic>?;
+    final latitude = location?['latitude'];
+    final longitude = location?['longitude'];
+    final timestamp = _latestSOSEvent!['timestamp'] as Timestamp?;
+    final timeAgo = timestamp != null ? _getTimeAgo(timestamp.toDate()) : 'Just now';
+    
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.red.shade50,
+        border: Border.all(color: Colors.red, width: 2),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.warning, color: Colors.red, size: 32),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '🚨 SOS ALERT: $userName',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: Colors.red,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text('Emergency triggered - $timeAgo'),
+                if (latitude != null && longitude != null)
+                  Text(
+                    'Location: ${latitude.toStringAsFixed(4)}, ${longitude.toStringAsFixed(4)}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              if (_latestSOSEvent!['userId'] != null) {
+                context.push('/admin/user/${_latestSOSEvent!['userId']}?tab=sos');
+              }
+            },
+            child: const Text('View Details'),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () {
+              setState(() {
+                _latestSOSEvent = null;
+              });
+            },
+          ),
+        ],
+      ),
     );
   }
 

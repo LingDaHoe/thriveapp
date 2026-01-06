@@ -8,6 +8,9 @@ class GroupChatMessage {
   final String content;
   final DateTime timestamp;
   final List<String> seenBy; // Users who have seen this message
+  final String? imageUrl; // URL of uploaded image
+  final String? videoUrl; // URL of uploaded video
+  final String? mediaType; // 'image' or 'video'
 
   GroupChatMessage({
     required this.id,
@@ -17,6 +20,9 @@ class GroupChatMessage {
     required this.content,
     required this.timestamp,
     this.seenBy = const [],
+    this.imageUrl,
+    this.videoUrl,
+    this.mediaType,
   });
 
   factory GroupChatMessage.fromJson(Map<String, dynamic> json) {
@@ -28,6 +34,9 @@ class GroupChatMessage {
       content: json['content'] as String,
       timestamp: (json['timestamp'] as Timestamp).toDate(),
       seenBy: List<String>.from(json['seenBy'] ?? []),
+      imageUrl: json['imageUrl'] as String?,
+      videoUrl: json['videoUrl'] as String?,
+      mediaType: json['mediaType'] as String?,
     );
   }
 
@@ -40,6 +49,9 @@ class GroupChatMessage {
       'content': content,
       'timestamp': Timestamp.fromDate(timestamp),
       'seenBy': seenBy,
+      if (imageUrl != null) 'imageUrl': imageUrl,
+      if (videoUrl != null) 'videoUrl': videoUrl,
+      if (mediaType != null) 'mediaType': mediaType,
     };
   }
 }

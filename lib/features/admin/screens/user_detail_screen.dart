@@ -159,6 +159,13 @@ class _UserDetailScreenState extends State<UserDetailScreen> with SingleTickerPr
     return Scaffold(
       appBar: AppBar(
         title: Text(_userProfile?['displayName'] ?? 'User Details'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.edit),
+            tooltip: 'Edit User Credentials',
+            onPressed: _showEditUserDialog,
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController!,
           isScrollable: true,
@@ -875,6 +882,111 @@ class _UserDetailScreenState extends State<UserDetailScreen> with SingleTickerPr
                 );
               },
             ),
+    );
+  }
+
+  Future<void> _showEditUserDialog() async {
+    final displayNameController = TextEditingController(
+      text: _userProfile?['displayName'] ?? '',
+    );
+    final passwordController = TextEditingController();
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit User Credentials'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: displayNameController,
+                decoration: const InputDecoration(
+                  labelText: 'Username (Display Name)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: passwordController,
+                decoration: const InputDecoration(
+                  labelText: 'New Password (leave empty to keep current)',
+                  border: OutlineInputBorder(),
+                  helperText: 'Note: Password reset email will be sent to user',
+                ),
+                obscureText: true,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              try {
+                // Update display name
+                if (displayNameController.text.isNotEmpty &&
+                    displayNameController.text != _userProfile?['displayName']) {
+                  await _adminService.updateUserDisplayName(
+                    widget.userId,
+                    displayNameController.text,
+                  );
+                }
+
+                // Update password if provided
+                if (passwordController.text.isNotEmpty) {
+                  try {
+                    await _adminService.updateUserPassword(
+                      widget.userId,
+                      passwordController.text,
+                    );
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Password reset email sent to user'),
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    // Password update sends reset email, which is expected
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Password reset email sent: $e'),
+                        ),
+                      );
+                    }
+                  }
+                }
+
+                // Reload user data
+                await _loadUserData();
+
+                if (mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('User credentials updated successfully'),
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error updating credentials: $e'),
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -546,6 +546,115 @@ class AdminService {
     }
   }
 
+  // Stream of real-time SOS events from all users
+  Stream<List<Map<String, dynamic>>> watchAllSOSEvents() {
+    try {
+      // Get all user profiles first
+      return _firestore.collection('profiles').snapshots().asyncMap((profilesSnapshot) async {
+        final allEvents = <Map<String, dynamic>>[];
+        
+        for (final userDoc in profilesSnapshot.docs) {
+          final userId = userDoc.id;
+          try {
+            // Get recent SOS events for this user
+            final eventsSnapshot = await _firestore
+                .collection('users')
+                .doc(userId)
+                .collection('emergency_events')
+                .where('type', isEqualTo: 'SOS')
+                .orderBy('timestamp', descending: true)
+                .limit(10)
+                .get();
+            
+            for (final eventDoc in eventsSnapshot.docs) {
+              final eventData = eventDoc.data();
+              allEvents.add({
+                'id': eventDoc.id,
+                ...eventData,
+                'userId': userId,
+                'userName': userDoc.data()['displayName'] ?? 'Unknown User',
+                'userEmail': userDoc.data()['email'] ?? '',
+              });
+            }
+          } catch (e) {
+            debugPrint('Error getting SOS events for user $userId: $e');
+          }
+        }
+
+        // Sort by timestamp descending
+        allEvents.sort((a, b) {
+          final aTime = a['timestamp'] as Timestamp?;
+          final bTime = b['timestamp'] as Timestamp?;
+          if (aTime == null || bTime == null) return 0;
+          return bTime.compareTo(aTime);
+        });
+
+        return allEvents;
+      });
+    } catch (e) {
+      debugPrint('Error watching SOS events: $e');
+      return Stream.value([]);
+    }
+  }
+
+  // Update user display name (username)
+  Future<void> updateUserDisplayName(String userId, String newDisplayName) async {
+    try {
+      // Update in profiles collection
+      await _firestore.collection('profiles').doc(userId).update({
+        'displayName': newDisplayName,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      // Update in users collection if it exists
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      if (userDoc.exists) {
+        await _firestore.collection('users').doc(userId).update({
+          'displayName': newDisplayName,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      // Note: Firebase Auth display name update requires the user to be signed in
+      // For admin updates, we update Firestore which is the source of truth
+      // The display name in Firebase Auth will sync on next user login
+    } catch (e) {
+      debugPrint('Error updating user display name: $e');
+      rethrow;
+    }
+  }
+
+  // Update user password
+  Future<void> updateUserPassword(String userId, String newPassword) async {
+    try {
+      // Get user email from profile
+      final profileDoc = await _firestore.collection('profiles').doc(userId).get();
+      if (!profileDoc.exists) {
+        throw Exception('User profile not found');
+      }
+
+      final email = profileDoc.data()?['email'] as String?;
+      if (email == null) {
+        throw Exception('User email not found');
+      }
+
+      // Update password using Firebase Admin SDK would be ideal, but since we're using client SDK,
+      // we need to sign in as the user temporarily to change password
+      // For admin functionality, we'll create a password reset link instead
+      // Or we can use Firebase Admin SDK if available
+      
+      // Alternative: Use password reset email
+      await _auth.sendPasswordResetEmail(email: email);
+      
+      // Note: For production, you should use Firebase Admin SDK to directly update passwords
+      // This is a workaround that sends a password reset email
+      throw Exception('Password reset email sent. For direct password update, use Firebase Admin SDK.');
+    } catch (e) {
+      debugPrint('Error updating user password: $e');
+      rethrow;
+    }
+  }
+
   // Admin login (check if user exists in admins collection)
   Future<AdminUser?> adminLogin(String email, String password) async {
     try {

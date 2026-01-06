@@ -198,12 +198,7 @@ class EmergencyBloc extends Bloc<EmergencyEvent, EmergencyState> {
         }
 
         try {
-          // Call all emergency contacts
-          if (state.contacts.isNotEmpty) {
-            await _emergencyService.callAllEmergencyContacts(state.contacts);
-          }
-
-          // Notify all contacts (SMS/Email)
+          // Notify all contacts (SMS/Email) - bulk messaging
           await _emergencyService.notifyEmergencyContacts(
             state.contacts,
             location,

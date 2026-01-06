@@ -188,13 +188,10 @@ class _ExerciseRoutineScreenState extends State<ExerciseRoutineScreen> with Sing
                           content: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(
-                                IconData(
-                                  int.parse(achievement.icon),
-                                  fontFamily: 'MaterialIcons',
-                                ),
-                                size: 48,
-                                color: Colors.amber,
+                              // Display emoji instead of Material Icon
+                              Text(
+                                achievement.icon,
+                                style: const TextStyle(fontSize: 48),
                               ),
                               const SizedBox(height: 16),
                               Text(

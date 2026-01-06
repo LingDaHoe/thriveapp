@@ -270,11 +270,10 @@ class EmergencyService {
     }
   }
 
-  // Request permissions
+  // Request permissions (SMS and Location only - no phone calls)
   Future<bool> _requestPermissions() async {
     Map<Permission, PermissionStatus> statuses = await [
       Permission.sms,
-      Permission.phone,
       Permission.location,
     ].request();
 
@@ -365,19 +364,23 @@ class EmergencyService {
     }
   }
 
-  // Emergency Notifications
+  // Emergency Notifications - Bulk SMS and Email
   Future<void> notifyEmergencyContacts(
     List<EmergencyContact> contacts,
     Map<String, dynamic> location,
   ) async {
+    if (contacts.isEmpty) {
+      debugPrint('No emergency contacts to notify');
+      return;
+    }
+
     // Request permissions first
     bool permissionsGranted = await _requestPermissions();
     if (!permissionsGranted) {
       throw Exception('Required permissions not granted');
     }
 
-    for (final contact in contacts) {
-      final message = '''
+    final message = '''
 EMERGENCY ALERT from ${_auth.currentUser?.displayName ?? 'User'}!
 
 Location: https://maps.google.com/?q=${location['latitude']},${location['longitude']}
@@ -386,6 +389,9 @@ Time: ${DateTime.now().toIso8601String()}
 This is an automated emergency alert. Please respond immediately.
 ''';
 
+    // Group all phone numbers for bulk SMS
+    final List<String> phoneNumbers = [];
+    for (final contact in contacts) {
       // Format phone number for SMS (Malaysian format)
       String formattedPhone = contact.phoneNumber.replaceAll(RegExp(r'[^\d]'), '');
       
@@ -401,59 +407,78 @@ This is an automated emergency alert. Please respond immediately.
         formattedPhone = '+60$formattedPhone';
       }
 
-      print('Attempting to send SMS to: $formattedPhone'); // Debug log
+      // Remove + for SMS URI (some devices don't handle it well)
+      String smsPhone = formattedPhone.replaceAll('+', '');
+      phoneNumbers.add(smsPhone);
+    }
 
-      // Try different URI schemes for SMS
-      bool smsSent = false;
-      
-      // Try SMS - Note: sms: URI opens the default SMS app with pre-filled message
-      // The user must manually tap "Send" in the SMS app (this is Android security)
-      // We cannot programmatically send SMS without user interaction on modern Android
+    // Send bulk SMS - group all phone numbers in single SMS URI
+    if (phoneNumbers.isNotEmpty) {
       try {
-        // Remove + for SMS URI (some devices don't handle it well)
-        String smsPhone = formattedPhone.replaceAll('+', '');
-        final smsUri = Uri.parse('sms:$smsPhone?body=${Uri.encodeComponent(message)}');
+        // Use comma-separated phone numbers for bulk SMS
+        final phoneNumbersString = phoneNumbers.join(',');
+        final smsUri = Uri.parse('sms:$phoneNumbersString?body=${Uri.encodeComponent(message)}');
         final launched = await launchUrl(smsUri, mode: LaunchMode.externalApplication);
         if (launched) {
-          smsSent = true;
-          debugPrint('SMS app opened successfully for: $smsPhone (user must tap Send)');
+          debugPrint('Bulk SMS app opened successfully for ${phoneNumbers.length} recipients (user must tap Send)');
         } else {
-          debugPrint('SMS app launch failed');
+          debugPrint('Bulk SMS app launch failed');
+          // Log this failure for debugging
+          await logEmergencyEvent(
+            type: 'notification_failed',
+            description: 'Failed to launch bulk SMS to ${phoneNumbers.length} recipients',
+            location: location,
+            notifiedContacts: contacts.map((c) => c.id).toList(),
+          );
         }
       } catch (e) {
-        debugPrint('SMS failed: $e');
-      }
-      
-      // Note: Phone call is handled separately in callPrimaryEmergencyContact()
-      // which is called BEFORE notifyEmergencyContacts() in the SOS flow
-
-      if (!smsSent) {
-        print('Could not launch SMS or call for number: $formattedPhone');
+        debugPrint('Bulk SMS failed: $e');
         // Log this failure for debugging
         await logEmergencyEvent(
           type: 'notification_failed',
-          description: 'Failed to send SMS/call to $formattedPhone',
+          description: 'Bulk SMS error: $e',
           location: location,
-          notifiedContacts: [contact.id],
+          notifiedContacts: contacts.map((c) => c.id).toList(),
         );
       }
+    }
 
-      // Send Email if available
-      if (contact.email != null) {
-        try {
-          final emailUri = Uri.parse('mailto:${contact.email}?subject=${Uri.encodeComponent('EMERGENCY ALERT')}&body=${Uri.encodeComponent(message)}');
-          await launchUrl(emailUri, mode: LaunchMode.externalApplication);
-          print('Email launched successfully');
-        } catch (e) {
-          print('Email failed: $e');
+    // Group all email addresses for bulk email
+    final List<String> emailAddresses = [];
+    for (final contact in contacts) {
+      if (contact.email != null && contact.email!.isNotEmpty) {
+        emailAddresses.add(contact.email!);
+      }
+    }
+
+    // Send bulk email - group all email addresses in single mailto URI
+    if (emailAddresses.isNotEmpty) {
+      try {
+        // Use comma-separated email addresses for bulk email
+        final emailAddressesString = emailAddresses.join(',');
+        final emailUri = Uri.parse('mailto:$emailAddressesString?subject=${Uri.encodeComponent('EMERGENCY ALERT')}&body=${Uri.encodeComponent(message)}');
+        final launched = await launchUrl(emailUri, mode: LaunchMode.externalApplication);
+        if (launched) {
+          debugPrint('Bulk email app opened successfully for ${emailAddresses.length} recipients');
+        } else {
+          debugPrint('Bulk email app launch failed');
           // Log this failure for debugging
           await logEmergencyEvent(
             type: 'email_failed',
-            description: 'Failed to send email to ${contact.email}',
+            description: 'Failed to launch bulk email to ${emailAddresses.length} recipients',
             location: location,
-            notifiedContacts: [contact.id],
+            notifiedContacts: contacts.map((c) => c.id).toList(),
           );
         }
+      } catch (e) {
+        debugPrint('Bulk email failed: $e');
+        // Log this failure for debugging
+        await logEmergencyEvent(
+          type: 'email_failed',
+          description: 'Bulk email error: $e',
+          location: location,
+          notifiedContacts: contacts.map((c) => c.id).toList(),
+        );
       }
     }
   }

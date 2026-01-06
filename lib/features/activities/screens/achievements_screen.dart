@@ -3,8 +3,22 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../activity_bloc.dart';
 import '../models/achievement.dart';
 
-class AchievementsScreen extends StatelessWidget {
+class AchievementsScreen extends StatefulWidget {
   const AchievementsScreen({super.key});
+
+  @override
+  State<AchievementsScreen> createState() => _AchievementsScreenState();
+}
+
+class _AchievementsScreenState extends State<AchievementsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Load achievements when screen initializes
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<ActivityBloc>().add(LoadAchievements());
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -21,9 +35,15 @@ class AchievementsScreen extends StatelessWidget {
             return Center(child: Text(state.message));
           }
           if (state is AchievementsLoaded) {
+            if (state.achievements.isEmpty) {
+              return const Center(
+                child: Text('No achievements available'),
+              );
+            }
             return _buildAchievementsList(context, state.achievements);
           }
-          return const Center(child: Text('No achievements available'));
+          // Initial state - show loading while fetching
+          return const Center(child: CircularProgressIndicator());
         },
       ),
     );
@@ -85,13 +105,13 @@ class AchievementsScreen extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(
-                  IconData(
-                    int.parse(achievement.icon),
-                    fontFamily: 'MaterialIcons',
+                // Display emoji instead of Material Icon
+                Text(
+                  achievement.icon,
+                  style: TextStyle(
+                    fontSize: 32,
+                    color: achievement.isUnlocked() ? null : Colors.grey,
                   ),
-                  size: 32,
-                  color: achievement.isUnlocked() ? Colors.amber : Colors.grey,
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -124,21 +144,58 @@ class AchievementsScreen extends StatelessWidget {
                 ),
               ],
             ),
-            if (!achievement.isUnlocked() && progress != null) ...[
-              const SizedBox(height: 16),
+            // Always show requirements and progress, whether locked or unlocked
+            const SizedBox(height: 16),
+            if (progress != null) ...[
               LinearProgressIndicator(
-                value: progress,
+                value: progress.clamp(0.0, 1.0),
                 backgroundColor: Colors.grey[200],
                 valueColor: AlwaysStoppedAnimation<Color>(
-                  Theme.of(context).colorScheme.primary,
+                  achievement.isUnlocked() 
+                      ? Colors.green 
+                      : Theme.of(context).colorScheme.primary,
                 ),
               ),
               const SizedBox(height: 8),
-              Text(
-                _getProgressText(achievement, requirements, progress),
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
             ],
+            // Show requirements text
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: achievement.isUnlocked() 
+                    ? Colors.green.shade50 
+                    : Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    achievement.isUnlocked() ? '✅ Unlocked!' : '🔒 Requirements:',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: achievement.isUnlocked() ? Colors.green.shade700 : Colors.grey.shade700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _getRequirementsText(achievement, requirements),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  if (progress != null && !achievement.isUnlocked())
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        _getProgressText(achievement, requirements, progress),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -164,20 +221,40 @@ class AchievementsScreen extends StatelessWidget {
     }
   }
 
+  String _getRequirementsText(Achievement achievement, Map<String, dynamic> requirements) {
+    switch (achievement.type) {
+      case 'activity':
+        final count = requirements['count'] as int? ?? 1;
+        final activityType = requirements['activityType'] as String? ?? 'any';
+        final typeText = activityType == 'any' 
+            ? 'activities' 
+            : '$activityType activities';
+        return 'Complete $count $typeText';
+      case 'streak':
+        final days = requirements['days'] as int? ?? 7;
+        return 'Complete activities for $days days in a row';
+      case 'milestone':
+        final points = requirements['points'] as int? ?? 1000;
+        return 'Earn $points points';
+      default:
+        return achievement.description;
+    }
+  }
+
   String _getProgressText(Achievement achievement, Map<String, dynamic> requirements, double progress) {
     switch (achievement.type) {
       case 'activity':
         final count = requirements['count'] as int? ?? 1;
         final current = requirements['current'] as int? ?? 0;
-        return '$current/$count activities completed';
+        return 'Progress: $current/$count activities completed';
       case 'streak':
         final days = requirements['days'] as int? ?? 7;
         final current = requirements['current'] as int? ?? 0;
-        return '$current/$days days streak';
+        return 'Progress: $current/$days days streak';
       case 'milestone':
         final points = requirements['points'] as int? ?? 1000;
         final current = requirements['current'] as int? ?? 0;
-        return '$current/$points points';
+        return 'Progress: $current/$points points';
       default:
         return '';
     }

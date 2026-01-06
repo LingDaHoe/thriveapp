@@ -447,15 +447,127 @@ class ActivityService {
       final userId = _auth.currentUser?.uid;
       if (userId == null) throw Exception('User not authenticated');
 
-      final snapshot = await _firestore
+      // Get all available achievements from the main collection
+      final allAchievementsSnapshot = await _firestore
+          .collection('achievements')
+          .get();
+
+      // Get user's achievement progress
+      final userAchievementsSnapshot = await _firestore
           .collection('achievements')
           .doc(userId)
           .collection('userAchievements')
           .get();
 
-      return snapshot.docs
-          .map((doc) => Achievement.fromJson(doc.data()))
+      // Create a map of user achievement data by achievement ID
+      final userAchievementsMap = <String, Map<String, dynamic>>{};
+      for (var doc in userAchievementsSnapshot.docs) {
+        final data = doc.data();
+        final achievementId = data['id'] as String? ?? doc.id;
+        userAchievementsMap[achievementId] = data;
+      }
+
+      // Get user's completed activities to calculate progress
+      final completedActivities = await _firestore
+          .collection('activityProgress')
+          .doc(userId)
+          .collection('activities')
+          .where('status', isEqualTo: 'completed')
+          .get();
+
+      // Calculate activity counts by type
+      final activityCounts = <String, int>{};
+      for (var doc in completedActivities.docs) {
+        final activityId = doc.data()['activityId'] as String;
+        final activityDoc = await _firestore
+            .collection('activities')
+            .doc(activityId)
+            .get();
+        if (activityDoc.exists) {
+          final type = activityDoc.data()?['type'] as String? ?? 'unknown';
+          activityCounts[type] = (activityCounts[type] ?? 0) + 1;
+        }
+      }
+
+      // Calculate streak
+      final dates = completedActivities.docs
+          .map((doc) => (doc.data()['completedAt'] as Timestamp).toDate())
           .toList();
+      dates.sort();
+      final currentStreak = _calculateCurrentStreak(dates);
+
+      // Calculate total points
+      final totalPoints = completedActivities.docs.fold<int>(
+        0,
+        (sum, doc) => sum + (doc.data()['pointsEarned'] as int? ?? 0),
+      );
+
+      // Merge all achievements with user progress
+      final List<Achievement> achievements = [];
+      for (var doc in allAchievementsSnapshot.docs) {
+        final achievementData = doc.data();
+        final achievementId = achievementData['id'] as String? ?? doc.id;
+        final userAchievementData = userAchievementsMap[achievementId];
+
+        // Get unlock status and progress from user data
+        DateTime? unlockedAt;
+        Map<String, dynamic>? requirements = achievementData['requirements'] as Map<String, dynamic>?;
+
+        if (userAchievementData != null) {
+          if (userAchievementData['unlockedAt'] != null) {
+            unlockedAt = (userAchievementData['unlockedAt'] as Timestamp).toDate();
+          }
+          // Use progress from user data if available
+          if (userAchievementData['progress'] != null) {
+            requirements = userAchievementData['progress'] as Map<String, dynamic>?;
+          }
+        } else {
+          // Calculate current progress if not stored
+          final achievement = Achievement.fromJson(achievementData);
+          switch (achievement.type) {
+            case 'activity':
+              final requiredCount = achievement.requirements?['count'] as int? ?? 1;
+              final activityType = achievement.requirements?['activityType'] as String? ?? 'any';
+              final currentCount = activityType == 'any' 
+                  ? completedActivities.docs.length 
+                  : activityCounts[activityType] ?? 0;
+              requirements = {
+                'count': requiredCount,
+                'current': currentCount,
+              };
+              break;
+            case 'streak':
+              final requiredDays = achievement.requirements?['days'] as int? ?? 7;
+              requirements = {
+                'days': requiredDays,
+                'current': currentStreak,
+              };
+              break;
+            case 'milestone':
+              final requiredPoints = achievement.requirements?['points'] as int? ?? 1000;
+              requirements = {
+                'points': requiredPoints,
+                'current': totalPoints,
+              };
+              break;
+          }
+        }
+
+        final achievement = Achievement(
+          id: achievementId,
+          title: achievementData['title'] as String,
+          description: achievementData['description'] as String,
+          type: achievementData['type'] as String,
+          points: achievementData['points'] as int,
+          icon: achievementData['icon'] as String,
+          requirements: requirements,
+          unlockedAt: unlockedAt,
+        );
+
+        achievements.add(achievement);
+      }
+
+      return achievements;
     } catch (e) {
       debugPrint('Error getting user achievements: $e');
       rethrow;
@@ -786,10 +898,70 @@ class ActivityService {
           'description': 'Complete your first activity',
           'type': 'activity',
           'points': 50,
-          'icon': '0xe3c7', // Icons.emoji_events
+          'icon': '🎯',
           'requirements': {
             'count': 1,
             'activityType': 'any',
+          },
+        },
+        {
+          'id': 'five_activities',
+          'title': 'Getting Started',
+          'description': 'Complete 5 activities',
+          'type': 'activity',
+          'points': 100,
+          'icon': '⭐',
+          'requirements': {
+            'count': 5,
+            'activityType': 'any',
+          },
+        },
+        {
+          'id': 'ten_activities',
+          'title': 'Activity Enthusiast',
+          'description': 'Complete 10 activities',
+          'type': 'activity',
+          'points': 200,
+          'icon': '🌟',
+          'requirements': {
+            'count': 10,
+            'activityType': 'any',
+          },
+        },
+        {
+          'id': 'twenty_five_activities',
+          'title': 'Activity Champion',
+          'description': 'Complete 25 activities',
+          'type': 'activity',
+          'points': 400,
+          'icon': '🏆',
+          'requirements': {
+            'count': 25,
+            'activityType': 'any',
+          },
+        },
+        {
+          'id': 'fifty_activities',
+          'title': 'Activity Master',
+          'description': 'Complete 50 activities',
+          'type': 'activity',
+          'points': 750,
+          'icon': '👑',
+          'requirements': {
+            'count': 50,
+            'activityType': 'any',
+          },
+        },
+        {
+          'id': 'physical_beginner',
+          'title': 'Physical Beginner',
+          'description': 'Complete 3 physical activities',
+          'type': 'activity',
+          'points': 150,
+          'icon': '🏃',
+          'requirements': {
+            'count': 3,
+            'activityType': 'physical',
           },
         },
         {
@@ -797,11 +969,35 @@ class ActivityService {
           'title': 'Physical Master',
           'description': 'Complete 10 physical activities',
           'type': 'activity',
-          'points': 200,
-          'icon': '0xe3c7',
+          'points': 300,
+          'icon': '💪',
           'requirements': {
             'count': 10,
             'activityType': 'physical',
+          },
+        },
+        {
+          'id': 'physical_expert',
+          'title': 'Physical Expert',
+          'description': 'Complete 25 physical activities',
+          'type': 'activity',
+          'points': 600,
+          'icon': '🏋️',
+          'requirements': {
+            'count': 25,
+            'activityType': 'physical',
+          },
+        },
+        {
+          'id': 'mental_beginner',
+          'title': 'Mental Beginner',
+          'description': 'Complete 3 mental activities',
+          'type': 'activity',
+          'points': 150,
+          'icon': '🧩',
+          'requirements': {
+            'count': 3,
+            'activityType': 'mental',
           },
         },
         {
@@ -809,11 +1005,35 @@ class ActivityService {
           'title': 'Mental Master',
           'description': 'Complete 10 mental activities',
           'type': 'activity',
-          'points': 200,
-          'icon': '0xe3c7',
+          'points': 300,
+          'icon': '🧠',
           'requirements': {
             'count': 10,
             'activityType': 'mental',
+          },
+        },
+        {
+          'id': 'mental_expert',
+          'title': 'Mental Expert',
+          'description': 'Complete 25 mental activities',
+          'type': 'activity',
+          'points': 600,
+          'icon': '🎓',
+          'requirements': {
+            'count': 25,
+            'activityType': 'mental',
+          },
+        },
+        {
+          'id': 'social_beginner',
+          'title': 'Social Beginner',
+          'description': 'Complete 3 social activities',
+          'type': 'activity',
+          'points': 150,
+          'icon': '👥',
+          'requirements': {
+            'count': 3,
+            'activityType': 'social',
           },
         },
         {
@@ -821,10 +1041,22 @@ class ActivityService {
           'title': 'Social Master',
           'description': 'Complete 10 social activities',
           'type': 'activity',
-          'points': 200,
-          'icon': '0xe3c7',
+          'points': 300,
+          'icon': '🤝',
           'requirements': {
             'count': 10,
+            'activityType': 'social',
+          },
+        },
+        {
+          'id': 'social_expert',
+          'title': 'Social Expert',
+          'description': 'Complete 25 social activities',
+          'type': 'activity',
+          'points': 600,
+          'icon': '🎉',
+          'requirements': {
+            'count': 25,
             'activityType': 'social',
           },
         },
@@ -836,9 +1068,20 @@ class ActivityService {
           'description': 'Complete activities for 3 days in a row',
           'type': 'streak',
           'points': 100,
-          'icon': '0xe3c7',
+          'icon': '🔥',
           'requirements': {
             'days': 3,
+          },
+        },
+        {
+          'id': 'five_day_streak',
+          'title': 'Five Day Streak',
+          'description': 'Complete activities for 5 days in a row',
+          'type': 'streak',
+          'points': 200,
+          'icon': '🔥🔥',
+          'requirements': {
+            'days': 5,
           },
         },
         {
@@ -847,9 +1090,20 @@ class ActivityService {
           'description': 'Complete activities for 7 days in a row',
           'type': 'streak',
           'points': 300,
-          'icon': '0xe3c7',
+          'icon': '🔥🔥🔥',
           'requirements': {
             'days': 7,
+          },
+        },
+        {
+          'id': 'fourteen_day_streak',
+          'title': 'Two Week Champion',
+          'description': 'Complete activities for 14 days in a row',
+          'type': 'streak',
+          'points': 500,
+          'icon': '💯',
+          'requirements': {
+            'days': 14,
           },
         },
         {
@@ -858,9 +1112,20 @@ class ActivityService {
           'description': 'Complete activities for 30 days in a row',
           'type': 'streak',
           'points': 1000,
-          'icon': '0xe3c7',
+          'icon': '🏅',
           'requirements': {
             'days': 30,
+          },
+        },
+        {
+          'id': 'sixty_day_streak',
+          'title': 'Dedication Legend',
+          'description': 'Complete activities for 60 days in a row',
+          'type': 'streak',
+          'points': 2000,
+          'icon': '👑',
+          'requirements': {
+            'days': 60,
           },
         },
 
@@ -871,9 +1136,20 @@ class ActivityService {
           'description': 'Earn 100 points',
           'type': 'milestone',
           'points': 50,
-          'icon': '0xe3c7',
+          'icon': '💰',
           'requirements': {
             'points': 100,
+          },
+        },
+        {
+          'id': 'points_250',
+          'title': 'Points Accumulator',
+          'description': 'Earn 250 points',
+          'type': 'milestone',
+          'points': 100,
+          'icon': '💵',
+          'requirements': {
+            'points': 250,
           },
         },
         {
@@ -882,7 +1158,7 @@ class ActivityService {
           'description': 'Earn 500 points',
           'type': 'milestone',
           'points': 200,
-          'icon': '0xe3c7',
+          'icon': '💎',
           'requirements': {
             'points': 500,
           },
@@ -893,9 +1169,42 @@ class ActivityService {
           'description': 'Earn 1,000 points',
           'type': 'milestone',
           'points': 500,
-          'icon': '0xe3c7',
+          'icon': '💍',
           'requirements': {
             'points': 1000,
+          },
+        },
+        {
+          'id': 'points_2500',
+          'title': 'Points Expert',
+          'description': 'Earn 2,500 points',
+          'type': 'milestone',
+          'points': 1000,
+          'icon': '💸',
+          'requirements': {
+            'points': 2500,
+          },
+        },
+        {
+          'id': 'points_5000',
+          'title': 'Points Legend',
+          'description': 'Earn 5,000 points',
+          'type': 'milestone',
+          'points': 2000,
+          'icon': '🏆',
+          'requirements': {
+            'points': 5000,
+          },
+        },
+        {
+          'id': 'points_10000',
+          'title': 'Points Grandmaster',
+          'description': 'Earn 10,000 points',
+          'type': 'milestone',
+          'points': 5000,
+          'icon': '👑',
+          'requirements': {
+            'points': 10000,
           },
         },
       ];
